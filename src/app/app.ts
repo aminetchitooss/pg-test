@@ -1,12 +1,14 @@
 import { Component, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { CreditJsonEditorComponent } from "./credit/components/credit-json-editor/credit-json-editor.component";
+import { FormsModule } from "@angular/forms";
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet],
+  imports: [CreditJsonEditorComponent, FormsModule],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
 export class App {
   protected readonly title = signal('pg-test');
+  test =""
 }

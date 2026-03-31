@@ -20,13 +20,30 @@
         "build": {
           "builder": "@angular/build:application",
           "options": {
+            "loader": {
+              ".ttf":"binary"
+            },
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
             "inlineStyleLanguage": "scss",
+            "namedChunks": true,
             "assets": [
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "**/*.js",
+                "input": "node_modules/monaco-editor/esm/vs",
+                "ignore": [
+                  "**/platform/**",
+                  "**/basic-languages/**",
+                  "**/css/**",
+                  "**/html/**",
+                  "**/typescript/**",
+                  "**/contrib/**"
+                ],
+                "output": "assets/monaco-editor/vs"
               }
             ],
             "styles": [
@@ -38,8 +55,8 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "500kB",
-                  "maximumError": "1MB"
+                  "maximumWarning": "4MB",
+                  "maximumError": "5MB"
                 },
                 {
                   "type": "anyComponentStyle",

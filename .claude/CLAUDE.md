@@ -1,9 +1,31 @@
+# CLAUDE.md
 
-You are an expert in TypeScript, Angular, and scalable web application development. You write functional, maintainable, performant, and accessible code following Angular and TypeScript best practices.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Commands
+
+- **Dev server:** `npm start` (serves at localhost:4200)
+- **Build:** `npm run build` (production) or `ng build --configuration development`
+- **Run all tests:** `npm test` (uses Vitest via `@angular/build:unit-test`)
+- **Run a single test file:** `npx ng test --include src/app/app.spec.ts`
+- **Generate component:** `npx ng generate component <name>`
+
+## Architecture
+
+Angular 21 standalone application using `@angular/build:application` builder.
+
+- **Entry point:** `src/main.ts` bootstraps with `appConfig` from `src/app/app.config.ts`
+- **Routing:** `src/app/app.routes.ts` — app-level route definitions, loaded via `provideRouter`
+- **Root component:** `src/app/app.ts` with external template (`app.html`) and styles (`app.scss`)
+- **Global styles:** `src/styles.scss` (SCSS, also used inline via `inlineStyleLanguage`)
+- **Static assets:** `public/` directory
+- **Component prefix:** `app`
+- **Testing:** Vitest with jsdom (not Karma/Jasmine), configured via `@angular/build:unit-test`
+- **Formatting:** Prettier configured in `package.json` (100 char width, single quotes, Angular HTML parser)
 
 ## TypeScript Best Practices
 
-- Use strict type checking
+- Use strict type checking (strict mode is enabled in `tsconfig.json`)
 - Prefer type inference when the type is obvious
 - Avoid the `any` type; use `unknown` when type is uncertain
 
