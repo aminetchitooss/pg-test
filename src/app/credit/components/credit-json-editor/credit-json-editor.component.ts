@@ -11,7 +11,9 @@ import {
   ViewChild,
 } from '@angular/core';
 import { ControlValueAccessor, FormsModule, NG_VALUE_ACCESSOR } from '@angular/forms';
-import * as monaco from 'monaco-editor';
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import 'monaco-editor/esm/vs/editor/editor.all';
+import 'monaco-editor/esm/vs/language/json/monaco.contribution';
 import { CreditJsonEditorService } from '../../services/credit-json-editor/credit-json-editor.service';
 
 @Component({

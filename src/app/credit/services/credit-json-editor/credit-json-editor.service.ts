@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
-import * as monaco from 'monaco-editor';
-import { languages } from 'monaco-editor';
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import { languages } from 'monaco-editor/esm/vs/editor/editor.api';
+import 'monaco-editor/esm/vs/language/json/monaco.contribution';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { CONFIG_SCHEMA } from './credit-json-editor-schema';
 import { CreditPrestoQueryDataService } from '../credit-presto-query-data/credit-presto-query-data.service';
@@ -35,17 +36,16 @@ export class CreditJsonEditorService implements SequentialInitializerInterface {
     if (this.isProviderRegistered) {
       return;
     }
-    const monacoInstance = (window as any).monaco || monaco;
-    this.updateIntellisense(monacoInstance);
+    this.updateIntellisense();
 
-    monacoInstance.languages.registerCompletionItemProvider('json', {
+    monaco.languages.registerCompletionItemProvider('json', {
       triggerCharacters: ['{'],
       provideCompletionItems: (model: any, position: any) => {
-        const suggestions = this.updateIntellisense(monacoInstance);
+        const suggestions = this.updateIntellisense();
         return { suggestions };
       },
     });
-    monacoInstance.languages.json.jsonDefaults.setDiagnosticsOptions({
+    monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
       allowComments: true,
       validate: true,
       enableSchemaRequest: false,
@@ -54,18 +54,18 @@ export class CreditJsonEditorService implements SequentialInitializerInterface {
     this.isProviderRegistered = true;
   }
 
-  updateIntellisense(monacoInstance?: any): languages.CompletionItem[] {
+  updateIntellisense(): languages.CompletionItem[] {
     const value = this.prestoQueryDataService.getTextSubstitutionsFromPrestoQueryString(true);
     const out = [
       {
         label: '{C}',
-        kind: monacoInstance?.languages.CompletionItemKind.Keyword,
+        kind: languages.CompletionItemKind.Keyword,
         insertText: 'C}',
         documentation: 'Currency',
       },
       {
         label: '{D}',
-        kind: monacoInstance?.languages.CompletionItemKind.Keyword,
+        kind: languages.CompletionItemKind.Keyword,
         insertText: 'D}',
         documentation: 'Date',
       },
