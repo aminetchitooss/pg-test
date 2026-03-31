@@ -57,6 +57,7 @@ export class CreditJsonEditorComponent implements OnInit, OnDestroy, ControlValu
   }
 
   ngOnInit(): void {
+    this.jsonEditorService.init();
     this.ngZone.runOutsideAngular(() => {
       this.editor = monaco.editor.create(this.editorContainer.nativeElement, {
         value: this.value(),
