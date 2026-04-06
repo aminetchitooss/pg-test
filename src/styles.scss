@@ -1,1 +1,24 @@
 /* You can add global styles to this file, and also import other style files */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.app-container {
+  height: 100vh;
+  padding: 24px;
+}
+
+ag-grid-angular {
+  --ag-quartz-font-family: system-ui, -apple-system, sans-serif;
+}
