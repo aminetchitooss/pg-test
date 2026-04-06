@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { AgGridAngular } from 'ag-grid-angular';
 import type {
   ColDef,
@@ -8,8 +8,10 @@ import type {
   GridApi,
   StatusPanelDef,
   SideBarDef,
+  SizeColumnsToFitGridStrategy,
+  RowSelectionOptions,
 } from 'ag-grid-community';
-import { themeQuartz } from 'ag-grid-community';
+import { appGridTheme } from '../shared/grid/grid-theme';
 
 interface RowData {
   id: number;
@@ -48,12 +50,13 @@ interface RowData {
         [rowSelection]="rowSelection"
         [sideBar]="sideBar"
         [statusBar]="statusBar"
-        [enableRangeSelection]="true"
+        [cellSelection]="true"
         [enableCharts]="true"
         [animateRows]="true"
         [pagination]="true"
         [paginationPageSize]="10"
         [paginationPageSizeSelector]="[5, 10, 25, 50]"
+        [autoSizeStrategy]="autoSizeStrategy"
         (gridReady)="onGridReady($event)"
         (cellValueChanged)="onCellValueChanged($event)"
         (selectionChanged)="onSelectionChanged($event)"
@@ -93,15 +96,15 @@ interface RowData {
 
     .btn {
       padding: 6px 14px;
-      border: 1px solid #d1d5db;
+      border: 1px solid var(--app-border-color, #d1d5db);
       border-radius: 6px;
-      background: #fff;
+      background: var(--app-surface-color, #fff);
       cursor: pointer;
       font-size: 0.875rem;
       transition: background 0.15s;
 
       &:hover:not(:disabled) {
-        background: #f3f4f6;
+        background: var(--app-hover-color, #f3f4f6);
       }
 
       &:disabled {
@@ -118,10 +121,11 @@ interface RowData {
   `,
 })
 export class GridComponent {
+  private readonly destroyRef = inject(DestroyRef);
   private gridApi: GridApi | null = null;
   private nextId = 8;
 
-  readonly theme = themeQuartz;
+  readonly theme = appGridTheme;
 
   readonly rowData = signal<RowData[]>([
     { id: 1, name: 'Angular', language: 'TypeScript', stars: 98200, forks: 26100, license: 'MIT', updated: '2026-04-01' },
@@ -142,8 +146,6 @@ export class GridComponent {
       field: 'id',
       headerName: 'ID',
       width: 80,
-      checkboxSelection: true,
-      headerCheckboxSelection: true,
     },
     { field: 'name', headerName: 'Project', editable: true, filter: 'agTextColumnFilter' },
     {
@@ -190,7 +192,15 @@ export class GridComponent {
     enablePivot: true,
   };
 
-  readonly rowSelection: 'single' | 'multiple' = 'multiple';
+  readonly rowSelection: RowSelectionOptions = {
+    mode: 'multiRow',
+    checkboxes: true,
+    headerCheckbox: true,
+  };
+
+  readonly autoSizeStrategy: SizeColumnsToFitGridStrategy = {
+    type: 'fitGridWidth',
+  };
 
   readonly sideBar: SideBarDef = {
     toolPanels: [
@@ -222,7 +232,9 @@ export class GridComponent {
 
   onGridReady(event: GridReadyEvent): void {
     this.gridApi = event.api;
-    event.api.sizeColumnsToFit();
+    this.destroyRef.onDestroy(() => {
+      this.gridApi = null;
+    });
   }
 
   onCellValueChanged(event: CellValueChangedEvent<RowData>): void {

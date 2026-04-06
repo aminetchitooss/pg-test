@@ -11,7 +11,9 @@
     (exportPositions)="onExportPositions()"
   />
 
-  @if (store.columns().length > 0) {
+  @if (store.error(); as error) {
+    <div class="error-message" role="alert">Failed to load data. Please try refreshing.</div>
+  } @else if (store.columns().length > 0) {
     <app-risk-position-grid
       [columns]="store.columns()"
       [rows]="store.rows()"

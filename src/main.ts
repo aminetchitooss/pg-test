@@ -1,10 +1,60 @@
 import { bootstrapApplication } from '@angular/platform-browser';
-import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
-import { AllEnterpriseModule, LicenseManager } from 'ag-grid-enterprise';
+import {
+  ClientSideRowModelModule,
+  CsvExportModule,
+  DateFilterModule,
+  ModuleRegistry,
+  NumberEditorModule,
+  NumberFilterModule,
+  PaginationModule,
+  RowSelectionModule,
+  RowStyleModule,
+  TextEditorModule,
+  TextFilterModule,
+  ValidationModule,
+} from 'ag-grid-community';
+import {
+  CellSelectionModule,
+  ColumnsToolPanelModule,
+  FiltersToolPanelModule,
+  IntegratedChartsModule,
+  LicenseManager,
+  PivotModule,
+  RichSelectModule,
+  RowGroupingModule,
+  SetFilterModule,
+  SideBarModule,
+  StatusBarModule,
+} from 'ag-grid-enterprise';
 import { appConfig } from './app/app.config';
 import { App } from './app/app';
 
-ModuleRegistry.registerModules([AllCommunityModule, AllEnterpriseModule]);
+ModuleRegistry.registerModules([
+  // Community
+  ClientSideRowModelModule,
+  CsvExportModule,
+  TextFilterModule,
+  NumberFilterModule,
+  DateFilterModule,
+  PaginationModule,
+  TextEditorModule,
+  NumberEditorModule,
+  RowSelectionModule,
+  RowStyleModule,
+  ValidationModule,
+
+  // Enterprise
+  SetFilterModule,
+  SideBarModule,
+  ColumnsToolPanelModule,
+  FiltersToolPanelModule,
+  StatusBarModule,
+  CellSelectionModule,
+  IntegratedChartsModule,
+  RichSelectModule,
+  RowGroupingModule,
+  PivotModule,
+]);
 
 // TODO: Replace with your AG Grid Enterprise license key
 // LicenseManager.setLicenseKey('YOUR_LICENSE_KEY');

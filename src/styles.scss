@@ -1,5 +1,19 @@
 /* You can add global styles to this file, and also import other style files */
 
+:root {
+  --app-border-color: #d1d5db;
+  --app-surface-color: #fff;
+  --app-hover-color: #f3f4f6;
+  --app-text-color: #333;
+  --app-text-muted: #555;
+  --app-bg-muted: #e8e8e8;
+  --app-border-muted: #b0b0b0;
+  --app-error-color: #d32f2f;
+  --app-grid-even-row: #dce6f5;
+  --app-grid-odd-row: #eaf1fa;
+  --app-loading-color: #666;
+}
+
 *,
 *::before,
 *::after {
@@ -12,6 +26,7 @@ body {
   padding: 0;
   height: 100%;
   font-family: system-ui, -apple-system, sans-serif;
+  color: var(--app-text-color);
 }
 
 .app-container {

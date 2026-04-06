@@ -7,7 +7,7 @@
 }
 
 .control-group {
-  border: 1px solid #b0b0b0;
+  border: 1px solid var(--app-border-muted, #b0b0b0);
   border-radius: 4px;
   padding: 8px 12px;
   margin: 0;
@@ -15,7 +15,7 @@
   legend {
     font-size: 0.8rem;
     font-weight: 600;
-    color: #333;
+    color: var(--app-text-color, #333);
     padding: 0 4px;
   }
 }
@@ -33,13 +33,13 @@
 
   .field-label {
     font-size: 0.7rem;
-    color: #555;
+    color: var(--app-text-muted, #555);
   }
 
   input {
     width: 80px;
     padding: 4px 6px;
-    border: 1px solid #b0b0b0;
+    border: 1px solid var(--app-border-muted, #b0b0b0);
     border-radius: 3px;
     font-size: 0.85rem;
     text-align: center;
@@ -58,7 +58,7 @@
   input {
     width: 180px;
     padding: 4px 6px;
-    border: 1px solid #b0b0b0;
+    border: 1px solid var(--app-border-muted, #b0b0b0);
     border-radius: 3px;
     font-size: 0.85rem;
   }

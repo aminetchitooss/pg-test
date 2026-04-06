@@ -6,7 +6,7 @@ import type { RiskPositionStatus } from '../../models/risk-position.model';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (status(); as s) {
-      <footer class="status-bar" role="status" aria-label="Risk position status">
+      <footer class="status-bar" role="status" aria-live="polite" aria-label="Risk position status">
         <span class="status-item"><strong>MMU:</strong> {{ s.mmuDirection }}</span>
         <span class="status-item"
           ><strong>Current snapshot time:</strong> {{ s.snapshotTime }}</span
@@ -20,7 +20,7 @@ import type { RiskPositionStatus } from '../../models/risk-position.model';
         <span class="status-item"
           ><strong>Comment:</strong> {{ s.comment }}</span
         >
-        <span class="status-warning">Some tenors could not be matched with saved data</span>
+        <span class="status-warning" role="alert">Some tenors could not be matched with saved data</span>
       </footer>
     }
   `,
@@ -30,10 +30,10 @@ import type { RiskPositionStatus } from '../../models/risk-position.model';
       align-items: center;
       gap: 16px;
       padding: 6px 12px;
-      background: #e8e8e8;
-      border-top: 1px solid #ccc;
+      background: var(--app-bg-muted, #e8e8e8);
+      border-top: 1px solid var(--app-border-muted, #b0b0b0);
       font-size: 0.75rem;
-      color: #333;
+      color: var(--app-text-color, #333);
       flex-wrap: wrap;
     }
 
@@ -43,7 +43,7 @@ import type { RiskPositionStatus } from '../../models/risk-position.model';
 
     .status-warning {
       margin-left: auto;
-      color: #d32f2f;
+      color: var(--app-error-color, #d32f2f);
       font-weight: 500;
     }
   `,

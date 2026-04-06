@@ -1,18 +1,22 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, input, output } from '@angular/core';
 import { AgGridAngular } from 'ag-grid-angular';
 import type {
   ColDef,
   GridReadyEvent,
   CellValueChangedEvent,
   GridApi,
-  RowClassParams,
+  SizeColumnsToFitGridStrategy,
 } from 'ag-grid-community';
-import { themeQuartz } from 'ag-grid-community';
+import { appGridTheme } from '../../../shared/grid/grid-theme';
 import type {
   RiskPositionColumnMeta,
   RiskPositionMultipliers,
   RiskPositionRow,
 } from '../../models/risk-position.model';
+import {
+  computeAdjustedReflexPosition,
+  computeAdjustedEPosition,
+} from '../../utils/risk-calculations';
 
 @Component({
   selector: 'app-risk-position-grid',
@@ -21,13 +25,14 @@ import type {
   template: `
     <ag-grid-angular
       class="risk-grid"
+      aria-label="Risk position data"
       [theme]="theme"
       [rowData]="rows()"
       [columnDefs]="columnDefs()"
       [defaultColDef]="defaultColDef"
-      [getRowStyle]="getRowStyle"
       [suppressMovableColumns]="true"
       [suppressCellFocus]="false"
+      [autoSizeStrategy]="autoSizeStrategy"
       (gridReady)="onGridReady($event)"
       (cellValueChanged)="onCellValueChanged($event)"
     />
@@ -42,23 +47,32 @@ import type {
     .risk-grid {
       width: 100%;
       height: 100%;
+
+      --ag-odd-row-background-color: var(--app-grid-odd-row, #eaf1fa);
+      --ag-row-background-color: var(--app-grid-even-row, #dce6f5);
     }
   `,
 })
 export class RiskPositionGridComponent {
+  private readonly destroyRef = inject(DestroyRef);
+
   readonly columns = input.required<RiskPositionColumnMeta[]>();
   readonly rows = input.required<RiskPositionRow[]>();
   readonly multipliers = input.required<RiskPositionMultipliers>();
 
   readonly cellValueChanged = output<CellValueChangedEvent>();
 
-  readonly theme = themeQuartz;
+  readonly theme = appGridTheme;
   private gridApi: GridApi | null = null;
 
   readonly defaultColDef: ColDef = {
     sortable: true,
     resizable: true,
     suppressHeaderMenuButton: true,
+  };
+
+  readonly autoSizeStrategy: SizeColumnsToFitGridStrategy = {
+    type: 'fitGridWidth',
   };
 
   readonly columnDefs = computed<ColDef[]>(() => {
@@ -82,39 +96,25 @@ export class RiskPositionGridComponent {
 
       if (col.field === 'adjustedReflexPosition') {
         def.editable = false;
-        def.valueGetter = (params) => {
-          const reflex = (params.data?.['reflexPosition'] as number) ?? 0;
-          const manual = (params.data?.['manualAdjustment'] as number) ?? 0;
-          return reflex * m.reflexPositionMultiplier + manual * m.manualAdjustmentMultiplier;
-        };
+        def.valueGetter = (params) =>
+          params.data ? computeAdjustedReflexPosition(params.data as RiskPositionRow, m) : 0;
       }
 
       if (col.field === 'adjustedEPosition') {
         def.editable = false;
-        def.valueGetter = (params) => {
-          const reflex = (params.data?.['reflexPosition'] as number) ?? 0;
-          const manual = (params.data?.['manualAdjustment'] as number) ?? 0;
-          const target = (params.data?.['targetPosition'] as number) ?? 0;
-          const adjusted =
-            reflex * m.reflexPositionMultiplier + manual * m.manualAdjustmentMultiplier;
-          return adjusted - target * m.targetPositionMultiplier;
-        };
+        def.valueGetter = (params) =>
+          params.data ? computeAdjustedEPosition(params.data as RiskPositionRow, m) : 0;
       }
 
       return def;
     });
   });
 
-  readonly getRowStyle = (params: RowClassParams) => {
-    if (params.node.rowIndex != null && params.node.rowIndex % 2 === 0) {
-      return { background: '#dce6f5' };
-    }
-    return { background: '#eaf1fa' };
-  };
-
   onGridReady(event: GridReadyEvent): void {
     this.gridApi = event.api;
-    event.api.sizeColumnsToFit();
+    this.destroyRef.onDestroy(() => {
+      this.gridApi = null;
+    });
   }
 
   onCellValueChanged(event: CellValueChangedEvent): void {

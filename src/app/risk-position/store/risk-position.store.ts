@@ -1,7 +1,7 @@
 import { computed, inject } from '@angular/core';
 import { signalStore, withState, withComputed, withMethods, patchState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
-import { pipe, switchMap, tap } from 'rxjs';
+import { catchError, EMPTY, pipe, switchMap, tap } from 'rxjs';
 import { RiskPositionApiService } from '../services/risk-position-api.service';
 import type {
   RiskPositionApiResponse,
@@ -13,6 +13,7 @@ import type {
 type RiskPositionState = {
   apiResponse: RiskPositionApiResponse | null;
   isLoading: boolean;
+  error: string | null;
   multipliers: RiskPositionMultipliers;
   spreadCurves: string;
   rows: RiskPositionRow[];
@@ -22,6 +23,7 @@ type RiskPositionState = {
 const initialState: RiskPositionState = {
   apiResponse: null,
   isLoading: false,
+  error: null,
   multipliers: {
     reflexPositionMultiplier: 1,
     manualAdjustmentMultiplier: 1,
@@ -48,7 +50,7 @@ export const RiskPositionStore = signalStore(
 
     loadData: rxMethod<void>(
       pipe(
-        tap(() => patchState(store, { isLoading: true })),
+        tap(() => patchState(store, { isLoading: true, error: null })),
         switchMap(() =>
           apiService.fetchRiskPositions(store.viewType()).pipe(
             tap((response) =>
@@ -58,6 +60,10 @@ export const RiskPositionStore = signalStore(
                 isLoading: false,
               }),
             ),
+            catchError((err) => {
+              patchState(store, { isLoading: false, error: String(err) });
+              return EMPTY;
+            }),
           ),
         ),
       ),
@@ -65,7 +71,7 @@ export const RiskPositionStore = signalStore(
 
     refreshInputs: rxMethod<void>(
       pipe(
-        tap(() => patchState(store, { isLoading: true })),
+        tap(() => patchState(store, { isLoading: true, error: null })),
         switchMap(() =>
           apiService.refreshInputs(store.viewType()).pipe(
             tap((response) =>
@@ -75,6 +81,10 @@ export const RiskPositionStore = signalStore(
                 isLoading: false,
               }),
             ),
+            catchError((err) => {
+              patchState(store, { isLoading: false, error: String(err) });
+              return EMPTY;
+            }),
           ),
         ),
       ),
