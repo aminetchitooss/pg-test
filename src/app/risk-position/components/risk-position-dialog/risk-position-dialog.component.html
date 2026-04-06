@@ -1,0 +1,26 @@
+<h2 mat-dialog-title>{{ viewType === 'pnl-attribution' ? 'P&L Attribution' : 'Risk Position' }}</h2>
+<mat-dialog-content class="dialog-content">
+  <app-risk-position-controls
+    [multipliers]="multipliers()"
+    [spreadCurves]="spreadCurves()"
+    [isLoading]="isLoading()"
+    (multipliersChange)="onMultipliersChange($event)"
+    (spreadCurvesChange)="spreadCurves.set($event)"
+    (refreshRisk)="onRefreshRisk()"
+    (refreshInputs)="onRefreshInputs()"
+    (exportPositions)="onExportPositions()"
+  />
+
+  @if (columns().length > 0) {
+    <app-risk-position-grid
+      [columns]="columns()"
+      [rows]="rows()"
+      [multipliers]="multipliers()"
+      (cellValueChanged)="onCellValueChanged($event)"
+    />
+  } @else {
+    <div class="loading-placeholder" role="status" aria-label="Loading">Loading data...</div>
+  }
+
+  <app-risk-position-status-bar [status]="status()" />
+</mat-dialog-content>

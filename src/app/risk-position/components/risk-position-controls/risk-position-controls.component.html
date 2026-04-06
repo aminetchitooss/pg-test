@@ -1,0 +1,70 @@
+<div class="controls-row">
+  <fieldset class="control-group">
+    <legend>Multipliers</legend>
+    <div class="multiplier-fields">
+      <label class="field">
+        <span class="field-label">Reflex Position Multiplier</span>
+        <input
+          type="number"
+          [ngModel]="multipliers().reflexPositionMultiplier"
+          (ngModelChange)="onMultiplierChange('reflexPositionMultiplier', $event)"
+          aria-label="Reflex Position Multiplier"
+        />
+      </label>
+      <label class="field">
+        <span class="field-label">Manual Adjustment Multiplier</span>
+        <input
+          type="number"
+          [ngModel]="multipliers().manualAdjustmentMultiplier"
+          (ngModelChange)="onMultiplierChange('manualAdjustmentMultiplier', $event)"
+          aria-label="Manual Adjustment Multiplier"
+        />
+      </label>
+      <label class="field">
+        <span class="field-label">Target Position Multiplier</span>
+        <input
+          type="number"
+          [ngModel]="multipliers().targetPositionMultiplier"
+          (ngModelChange)="onMultiplierChange('targetPositionMultiplier', $event)"
+          aria-label="Target Position Multiplier"
+        />
+      </label>
+    </div>
+  </fieldset>
+
+  <fieldset class="control-group">
+    <legend>Control</legend>
+    <div class="control-buttons">
+      <button
+        mat-raised-button
+        [disabled]="isLoading()"
+        (click)="refreshRisk.emit()"
+      >
+        Refresh Risk
+      </button>
+      <button
+        mat-raised-button
+        [disabled]="isLoading()"
+        (click)="refreshInputs.emit()"
+      >
+        Refresh Inputs
+      </button>
+      <button
+        mat-raised-button
+        (click)="exportPositions.emit()"
+      >
+        Export Positions
+      </button>
+    </div>
+  </fieldset>
+
+  <fieldset class="control-group spread-curves">
+    <legend>Spread Curves [do not change]</legend>
+    <input
+      type="text"
+      [ngModel]="spreadCurves()"
+      (ngModelChange)="onSpreadCurvesChange($event)"
+      aria-label="Spread Curves"
+    />
+  </fieldset>
+</div>

@@ -1,0 +1,65 @@
+.controls-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.control-group {
+  border: 1px solid #b0b0b0;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin: 0;
+
+  legend {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #333;
+    padding: 0 4px;
+  }
+}
+
+.multiplier-fields {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  .field-label {
+    font-size: 0.7rem;
+    color: #555;
+  }
+
+  input {
+    width: 80px;
+    padding: 4px 6px;
+    border: 1px solid #b0b0b0;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    text-align: center;
+  }
+}
+
+.control-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.spread-curves {
+  margin-left: auto;
+
+  input {
+    width: 180px;
+    padding: 4px 6px;
+    border: 1px solid #b0b0b0;
+    border-radius: 3px;
+    font-size: 0.85rem;
+  }
+}

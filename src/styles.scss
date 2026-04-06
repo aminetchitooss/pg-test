@@ -22,3 +22,16 @@ body {
 ag-grid-angular {
   --ag-quartz-font-family: system-ui, -apple-system, sans-serif;
 }
+
+.risk-position-dialog-panel {
+  .mat-mdc-dialog-container .mdc-dialog__surface {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .mat-mdc-dialog-content {
+    max-height: none;
+    flex: 1;
+    overflow: hidden;
+  }
+}
