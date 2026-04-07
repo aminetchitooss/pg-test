@@ -18,6 +18,11 @@ import {
   computeAdjustedEPosition,
 } from '../../utils/risk-calculations';
 
+const EVEN_ROW_COLOR = '#dce6f5';
+const ODD_ROW_COLOR = '#eaf1fa';
+const EDITABLE_EVEN_COLOR = '#fdf6e3';
+const EDITABLE_ODD_COLOR = '#fef9ec';
+
 @Component({
   selector: 'app-risk-position-grid',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -48,8 +53,15 @@ import {
       width: 100%;
       height: 100%;
 
-      --ag-odd-row-background-color: var(--app-grid-odd-row, #eaf1fa);
-      --ag-row-background-color: var(--app-grid-even-row, #dce6f5);
+      --ag-background-color: #dce6f5;
+      --ag-odd-row-background-color: #eaf1fa;
+      --ag-row-height: 26px;
+      --ag-header-height: 30px;
+      --ag-font-size: 12px;
+      --ag-border-color: #c8d0dc;
+      --ag-row-border-color: #d4dce8;
+      --ag-header-foreground-color: #1a1a1a;
+      --ag-header-background-color: #f0f0f0;
     }
   `,
 })
@@ -89,9 +101,21 @@ export class RiskPositionGridComponent {
       };
 
       if (col.type === 'numeric') {
-        def.type = 'rightAligned';
+        def.cellStyle = (params) => {
+          const isOdd = (params.node.rowIndex ?? 0) % 2 !== 0;
+          const base: Record<string, string> = { textAlign: 'right' };
+          if (col.editable) {
+            base['backgroundColor'] = isOdd ? EDITABLE_ODD_COLOR : EDITABLE_EVEN_COLOR;
+          }
+          return base;
+        };
         def.valueFormatter = (params) =>
           params.value != null ? Number(params.value).toLocaleString() : '';
+      } else if (col.editable) {
+        def.cellStyle = (params) => {
+          const isOdd = (params.node.rowIndex ?? 0) % 2 !== 0;
+          return { backgroundColor: isOdd ? EDITABLE_ODD_COLOR : EDITABLE_EVEN_COLOR };
+        };
       }
 
       if (col.field === 'adjustedReflexPosition') {

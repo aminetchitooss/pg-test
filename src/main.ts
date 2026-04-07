@@ -1,5 +1,6 @@
 import { bootstrapApplication } from '@angular/platform-browser';
 import {
+  CellStyleModule,
   ClientSideRowModelModule,
   CsvExportModule,
   DateFilterModule,
@@ -31,6 +32,7 @@ import { App } from './app/app';
 
 ModuleRegistry.registerModules([
   // Community
+  CellStyleModule,
   ClientSideRowModelModule,
   CsvExportModule,
   TextFilterModule,

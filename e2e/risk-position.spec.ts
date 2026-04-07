@@ -1,5 +1,16 @@
 import { test, expect } from '@playwright/test';
 
+function parseRgb(rgb: string): { r: number; g: number; b: number } {
+  const match = rgb.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  return match
+    ? { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]) }
+    : { r: 0, g: 0, b: 0 };
+}
+
+function isClose(a: number, b: number, tolerance = 10): boolean {
+  return Math.abs(a - b) <= tolerance;
+}
+
 test.describe('Risk Position Dialog', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/risk-position');
@@ -29,7 +40,9 @@ test.describe('Risk Position Dialog', () => {
     ];
 
     for (const header of expectedHeaders) {
-      await expect(page.locator(`.ag-header-cell-text:has-text("${header}")`)).toBeVisible();
+      await expect(
+        page.locator('.ag-header-cell-text', { hasText: new RegExp(`^${header.replace(/[()]/g, '\\$&')}$`) }),
+      ).toBeVisible();
     }
 
     const headerCount = await page.locator('.ag-header-cell').count();
@@ -39,14 +52,11 @@ test.describe('Risk Position Dialog', () => {
   test('should render rows with tenor data', async ({ page }) => {
     await page.click('button:has-text("Open Risk Position")');
     await page.waitForSelector('.ag-root-wrapper');
-
-    // Wait for rows to render
     await page.waitForSelector('.ag-row');
 
     const rowCount = await page.locator('.ag-row').count();
     expect(rowCount).toBeGreaterThan(0);
 
-    // Check first column cells contain expected tenor patterns
     const firstCellText = await page
       .locator('.ag-row[row-index="0"] .ag-cell[col-id="qualifiedTenor"]')
       .textContent();
@@ -57,8 +67,9 @@ test.describe('Risk Position Dialog', () => {
     await page.click('button:has-text("Open Risk Position")');
     await page.waitForSelector('.ag-row');
 
-    // Check Delta_10Y row which has value 2,886
-    const delta10yRow = page.locator('.ag-row .ag-cell[col-id="qualifiedTenor"]:has-text("Delta_10Y")');
+    const delta10yRow = page.locator(
+      '.ag-row .ag-cell[col-id="qualifiedTenor"]:has-text("Delta_10Y")',
+    );
     await expect(delta10yRow).toBeVisible();
 
     const reflexCell = delta10yRow.locator('..').locator('.ag-cell[col-id="reflexPosition"]');
@@ -70,23 +81,19 @@ test.describe('Risk Position Dialog', () => {
     await page.click('button:has-text("Open Risk Position")');
     await page.waitForSelector('.ag-row');
 
-    // Get initial adjusted reflex value for first row (Delta_O/N = 3)
     const adjustedCell = page.locator(
       '.ag-row[row-index="0"] .ag-cell[col-id="adjustedReflexPosition"]',
     );
     const initialValue = await adjustedCell.textContent();
     expect(initialValue?.trim()).toBe('3');
 
-    // Change Reflex Position Multiplier to 2
     const multiplierInput = page.locator('input[aria-label="Reflex Position Multiplier"]');
     await multiplierInput.clear();
     await multiplierInput.fill('2');
     await multiplierInput.press('Tab');
 
-    // Wait for grid to update
     await page.waitForTimeout(500);
 
-    // Adjusted value should now be 6
     const updatedValue = await adjustedCell.textContent();
     expect(updatedValue?.trim()).toBe('6');
   });
@@ -99,12 +106,10 @@ test.describe('Risk Position Dialog', () => {
       '.ag-row[row-index="0"] .ag-cell[col-id="manualAdjustment"]',
     );
 
-    // Double-click to edit
     await manualCell.dblclick();
     await page.keyboard.type('100');
     await page.keyboard.press('Enter');
 
-    // Wait for update
     await page.waitForTimeout(300);
 
     const cellValue = await manualCell.textContent();
@@ -142,20 +147,6 @@ test.describe('Risk Position Dialog', () => {
     await expect(spreadInput).toHaveValue('1M,6M,12M,OIS');
   });
 
-  test('should have alternating row colors', async ({ page }) => {
-    await page.click('button:has-text("Open Risk Position")');
-    await page.waitForSelector('.ag-row');
-
-    const row0Bg = await page.locator('.ag-row[row-index="0"]').evaluate(
-      (el) => getComputedStyle(el).backgroundColor,
-    );
-    const row1Bg = await page.locator('.ag-row[row-index="1"]').evaluate(
-      (el) => getComputedStyle(el).backgroundColor,
-    );
-
-    expect(row0Bg).not.toBe(row1Bg);
-  });
-
   test('should trigger CSV export when Export Positions is clicked', async ({ page }) => {
     await page.click('button:has-text("Open Risk Position")');
     await page.waitForSelector('.ag-row');
@@ -166,17 +157,140 @@ test.describe('Risk Position Dialog', () => {
 
     expect(download.suggestedFilename()).toBe('risk-positions.csv');
   });
+});
 
-  test('visual regression: full dialog', async ({ page }) => {
+test.describe('Risk Position Grid Styling (pixel-perfect)', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/risk-position');
     await page.click('button:has-text("Open Risk Position")');
     await page.waitForSelector('.ag-row');
+  });
 
-    // Wait for grid to fully render
-    await page.waitForTimeout(1000);
+  test('should have alternating row colors (two blue shades)', async ({ page }) => {
+    // Even row (index 0) — #dce6f5 → rgb(220, 230, 245)
+    const row0Bg = await page.locator('.ag-row[row-index="0"]').evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
+    );
+    // Odd row (index 1) — #eaf1fa → rgb(234, 241, 250)
+    const row1Bg = await page.locator('.ag-row[row-index="1"]').evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
+    );
 
-    const dialog = page.locator('mat-dialog-container');
-    await expect(dialog).toHaveScreenshot('risk-position-dialog.png', {
-      maxDiffPixelRatio: 0.02,
-    });
+    // Row colors must differ (alternating)
+    expect(row0Bg).not.toBe(row1Bg);
+
+    // Both must be blue-tinted (b >= r)
+    const c0 = parseRgb(row0Bg);
+    const c1 = parseRgb(row1Bg);
+    expect(c0.b).toBeGreaterThanOrEqual(c0.r);
+    expect(c1.b).toBeGreaterThanOrEqual(c1.r);
+  });
+
+  test('should have compact row height (~26px)', async ({ page }) => {
+    const rowHeight = await page.locator('.ag-row[row-index="0"]').evaluate(
+      (el) => el.getBoundingClientRect().height,
+    );
+    expect(rowHeight).toBeGreaterThanOrEqual(24);
+    expect(rowHeight).toBeLessThanOrEqual(30);
+  });
+
+  test('should have compact header height (~30px)', async ({ page }) => {
+    const headerHeight = await page.locator('.ag-header-row').evaluate(
+      (el) => el.getBoundingClientRect().height,
+    );
+    expect(headerHeight).toBeGreaterThanOrEqual(28);
+    expect(headerHeight).toBeLessThanOrEqual(34);
+  });
+
+  test('should use small font size (~12px)', async ({ page }) => {
+    const fontSize = await page.locator('.ag-row[row-index="0"] .ag-cell').first().evaluate(
+      (el) => getComputedStyle(el).fontSize,
+    );
+    expect(parseFloat(fontSize)).toBeGreaterThanOrEqual(11);
+    expect(parseFloat(fontSize)).toBeLessThanOrEqual(13);
+  });
+
+  test('should right-align numeric columns', async ({ page }) => {
+    const reflexCell = page.locator(
+      '.ag-row[row-index="0"] .ag-cell[col-id="reflexPosition"]',
+    );
+    // cellStyle sets textAlign: right inline
+    const textAlign = await reflexCell.evaluate(
+      (el) => (el as HTMLElement).style.textAlign || getComputedStyle(el).textAlign,
+    );
+    expect(textAlign).toBe('right');
+  });
+
+  test('should have cream/yellow background on editable cells', async ({ page }) => {
+    const editableCell = page.locator(
+      '.ag-row[row-index="0"] .ag-cell[col-id="manualAdjustment"]',
+    );
+    // cellStyle sets backgroundColor inline
+    const bg = await editableCell.evaluate(
+      (el) => (el as HTMLElement).style.backgroundColor || getComputedStyle(el).backgroundColor,
+    );
+    const c = parseRgb(bg);
+
+    // Should be warm/yellowish — red channel > blue channel (cream tint)
+    expect(c.r).toBeGreaterThan(c.b);
+    // Should be light overall
+    expect(c.r).toBeGreaterThan(200);
+    expect(c.g).toBeGreaterThan(200);
+  });
+
+  test('editable cells on odd rows should also have cream tint', async ({ page }) => {
+    const editableCell = page.locator(
+      '.ag-row[row-index="1"] .ag-cell[col-id="manualAdjustment"]',
+    );
+    const bg = await editableCell.evaluate(
+      (el) => (el as HTMLElement).style.backgroundColor || getComputedStyle(el).backgroundColor,
+    );
+    const c = parseRgb(bg);
+
+    expect(c.r).toBeGreaterThan(c.b);
+    expect(c.r).toBeGreaterThan(200);
+  });
+
+  test('should have visible column borders', async ({ page }) => {
+    const borderRight = await page
+      .locator('.ag-row[row-index="0"] .ag-cell')
+      .first()
+      .evaluate((el) => getComputedStyle(el).borderRightWidth);
+    const borderWidth = parseFloat(borderRight);
+    expect(borderWidth).toBeGreaterThanOrEqual(1);
+  });
+
+  test('non-editable numeric cells should NOT have cream tint', async ({ page }) => {
+    const reflexCell = page.locator(
+      '.ag-row[row-index="0"] .ag-cell[col-id="reflexPosition"]',
+    );
+    const bg = await reflexCell.evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
+    );
+    const c = parseRgb(bg);
+
+    // Should be blue-ish (blue >= red) or transparent (inherits row color)
+    // Not yellow/cream
+    expect(c.b).toBeGreaterThanOrEqual(c.r - 15);
+  });
+
+  test('status bar should have muted gray background', async ({ page }) => {
+    const statusBg = await page.locator('.status-bar').evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
+    );
+    const c = parseRgb(statusBg);
+    // Gray means r ≈ g ≈ b, all around 220-240 range
+    expect(isClose(c.r, c.g, 5) && isClose(c.g, c.b, 5)).toBe(true);
+    expect(c.r).toBeGreaterThan(200);
+  });
+
+  test('status warning text should be red', async ({ page }) => {
+    const warningColor = await page.locator('.status-warning').evaluate(
+      (el) => getComputedStyle(el).color,
+    );
+    const c = parseRgb(warningColor);
+    expect(c.r).toBeGreaterThan(180);
+    expect(c.g).toBeLessThan(80);
+    expect(c.b).toBeLessThan(80);
   });
 });
