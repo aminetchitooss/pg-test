@@ -1,58 +1,62 @@
-export type ShortcutHandler = () => void;
+/**
+ * Handler invoked when a registered shortcut fires.
+ *
+ * Return `false` to pass through to the next handler in the LIFO stack
+ * (useful when a parent wants to claim the shortcut if its child didn't).
+ * Return `void`, `true`, or omit a return to mark the shortcut as handled —
+ * dispatch stops and `preventDefault()` / `stopPropagation()` are called.
+ */
+export type ShortcutHandler = () => boolean | void;
 
-export enum CanonicalKey {
-  // Modifiers
-  Control = 'Control',
-  Meta = 'Meta',
-  Shift = 'Shift',
-  Alt = 'Alt',
+export type CanonicalKey =
+  | 'Control'
+  | 'Meta'
+  | 'Shift'
+  | 'Alt'
+  | 'Enter'
+  | 'Escape'
+  | 'Backspace'
+  | 'Tab'
+  | 'Space'
+  | 'PageUp'
+  | 'PageDown'
+  | 'Home'
+  | 'End'
+  | 'ArrowLeft'
+  | 'ArrowUp'
+  | 'ArrowRight'
+  | 'ArrowDown';
 
-  // Special non-character keys
-  Enter = 'Enter',
-  Escape = 'Escape',
-  Backspace = 'Backspace',
-  Tab = 'Tab',
-  Space = 'Space',
-  PageUp = 'PageUp',
-  PageDown = 'PageDown',
-  Home = 'Home',
-  End = 'End',
-  ArrowLeft = 'ArrowLeft',
-  ArrowUp = 'ArrowUp',
-  ArrowRight = 'ArrowRight',
-  ArrowDown = 'ArrowDown',
-}
+export const MODIFIER_KEYS = {
+  Control: 'Control',
+  Meta: 'Meta',
+  Shift: 'Shift',
+  Alt: 'Alt',
+} as const satisfies Record<string, CanonicalKey>;
 
-export const MODIFIER_KEYS = Object.freeze({
-  Control: CanonicalKey.Control,
-  Meta: CanonicalKey.Meta,
-  Shift: CanonicalKey.Shift,
-  Alt: CanonicalKey.Alt,
-} as const);
+export const NAMED_KEYS = {
+  ctrl: 'Control',
+  control: 'Control',
+  cmd: 'Meta',
+  meta: 'Meta',
+  shift: 'Shift',
+  alt: 'Alt',
 
-export const NAMED_KEYS = Object.freeze({
-  ctrl: CanonicalKey.Control,
-  control: CanonicalKey.Control,
-  cmd: CanonicalKey.Meta,
-  meta: CanonicalKey.Meta,
-  shift: CanonicalKey.Shift,
-  alt: CanonicalKey.Alt,
-
-  enter: CanonicalKey.Enter,
-  esc: CanonicalKey.Escape,
-  escape: CanonicalKey.Escape,
-  backspace: CanonicalKey.Backspace,
-  tab: CanonicalKey.Tab,
-  space: CanonicalKey.Space,
-  pageup: CanonicalKey.PageUp,
-  pagedown: CanonicalKey.PageDown,
-  home: CanonicalKey.Home,
-  end: CanonicalKey.End,
-  left: CanonicalKey.ArrowLeft,
-  up: CanonicalKey.ArrowUp,
-  right: CanonicalKey.ArrowRight,
-  down: CanonicalKey.ArrowDown,
-} as const);
+  enter: 'Enter',
+  esc: 'Escape',
+  escape: 'Escape',
+  backspace: 'Backspace',
+  tab: 'Tab',
+  space: 'Space',
+  pageup: 'PageUp',
+  pagedown: 'PageDown',
+  home: 'Home',
+  end: 'End',
+  left: 'ArrowLeft',
+  up: 'ArrowUp',
+  right: 'ArrowRight',
+  down: 'ArrowDown',
+} as const satisfies Record<string, CanonicalKey>;
 
 type NamedKey = keyof typeof NAMED_KEYS;
 
@@ -64,15 +68,14 @@ export function normalizeEvent(event: KeyboardEvent): string {
   if (event.shiftKey) parts.push(MODIFIER_KEYS.Shift);
   if (event.altKey) parts.push(MODIFIER_KEYS.Alt);
 
-  const keyPart = resolveKeyPart(event);
-  parts.push(keyPart);
+  parts.push(resolveKeyPart(event));
 
-  return parts.join('.'); // smth like this "Control.Shift.KeyS"
+  return parts.join('.'); // e.g. "Control.Shift.KeyS"
 }
 
 export function normalizeCombo(rawCombo: string): string {
   return rawCombo
-    .replace(/[+]/g, '.') // aslo allow + as separator
+    .replace(/[+]/g, '.') // accept + as separator too
     .replace(/\s+/g, '')
     .toLowerCase()
     .split('.')
@@ -82,7 +85,6 @@ export function normalizeCombo(rawCombo: string): string {
 
       const upper = part.toUpperCase();
       if (/^[A-Z]$/.test(upper)) return `Key${upper}`;
-
       if (/^[0-9]$/.test(upper)) return `Digit${upper}`;
 
       return part;
@@ -92,17 +94,11 @@ export function normalizeCombo(rawCombo: string): string {
 
 function resolveKeyPart(event: KeyboardEvent): string {
   const key = event.key;
-  const isSingleChar = key.length === 1;
-
-  if (isSingleChar) {
+  if (key.length === 1) {
     const upper = key.toUpperCase();
-
     if (/^[A-Z]$/.test(upper)) return `Key${upper}`;
-
     if (/^[0-9]$/.test(upper)) return `Digit${upper}`;
-
     return key;
   }
-
   return event.code;
 }
