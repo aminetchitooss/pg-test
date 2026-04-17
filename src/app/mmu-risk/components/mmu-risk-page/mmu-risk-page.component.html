@@ -1,0 +1,24 @@
+<div class="page">
+  <aside class="button-column">
+    <button
+      mat-raised-button
+      color="primary"
+      [attr.aria-expanded]="isOpen()"
+      aria-controls="mmu-risk-panel-region"
+      (click)="toggle()"
+    >
+      {{ isOpen() ? 'Close MMU Risk' : 'Open MMU Risk' }}
+    </button>
+  </aside>
+
+  <div
+    id="mmu-risk-panel-region"
+    class="panel-column"
+    role="region"
+    aria-label="MMU risk panel"
+  >
+    @if (isOpen()) {
+      <app-mmu-risk-panel />
+    }
+  </div>
+</div>

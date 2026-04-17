@@ -1,0 +1,37 @@
+<section class="panel" aria-labelledby="mmu-risk-panel-title">
+  <header class="panel-header">
+    <h2 id="mmu-risk-panel-title">
+      Feed Position Targets [MMU: {{ store.status()?.mmuDirection ?? 'Long' }}]
+    </h2>
+  </header>
+
+  <app-mmu-risk-controls
+    [multipliers]="store.multipliers()"
+    [spreadCurves]="store.spreadCurves()"
+    [override]="store.override()"
+    [inputsIncludeRiskColumns]="store.inputsIncludeRiskColumns()"
+    [riskLoading]="store.riskLoading()"
+    [configLoading]="store.configLoading()"
+    (multipliersChange)="onMultipliersChange($event)"
+    (spreadCurvesChange)="onSpreadCurvesChange($event)"
+    (overrideChange)="onOverrideChange($event)"
+    (inputsIncludeRiskColumnsChange)="store.setInputsIncludeRiskColumns($event)"
+    (refreshRisk)="store.refreshRisk()"
+    (refreshInputs)="store.refreshInputs()"
+    (exportPositions)="exportCsv()"
+  />
+
+  @if (store.error(); as error) {
+    <div class="error-message" role="alert">Failed to load data. Please try refreshing.</div>
+  } @else if (store.columns().length > 0) {
+    <app-mmu-risk-grid
+      [columns]="store.columns()"
+      [rows]="store.rows()"
+      (cellValueChanged)="onCellValueChanged($event)"
+    />
+  } @else {
+    <div class="loading-placeholder" role="status" aria-label="Loading">Loading data...</div>
+  }
+
+  <app-mmu-risk-status-bar [status]="store.status()" />
+</section>

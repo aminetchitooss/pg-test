@@ -11,4 +11,8 @@ export const routes: Routes = [
     loadChildren: () =>
       import('./risk-position/risk-position.routes').then((m) => m.riskPositionRoutes),
   },
+  {
+    path: 'mmu-risk',
+    loadChildren: () => import('./mmu-risk/mmu-risk.routes').then((m) => m.mmuRiskRoutes),
+  },
 ];

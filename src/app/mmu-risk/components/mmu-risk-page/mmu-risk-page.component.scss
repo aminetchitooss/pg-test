@@ -1,0 +1,32 @@
+:host {
+  display: block;
+  height: 100vh;
+  box-sizing: border-box;
+}
+
+.page {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  height: 100%;
+  box-sizing: border-box;
+  align-items: stretch;
+}
+
+.button-column {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.panel-column {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+}
+
+app-mmu-risk-panel {
+  flex: 1;
+  min-width: 0;
+}
