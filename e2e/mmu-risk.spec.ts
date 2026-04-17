@@ -419,6 +419,33 @@ test.describe('MMU Risk Page', () => {
     expect(joined).toContain('[mmu-risk] Close MMU Risk clicked');
   });
 
+  test('keyboard shortcuts toggle and close the panel', async ({ page }) => {
+    await page.goto('/mmu-risk');
+    await page.waitForSelector('button:has-text("Open MMU Risk")');
+
+    await expect(page.locator('app-mmu-risk-panel')).toHaveCount(0);
+
+    // Ctrl+A opens
+    await page.keyboard.press('Control+KeyA');
+    await expect(page.locator('app-mmu-risk-panel')).toBeVisible();
+
+    // Escape closes (pass-through handler returns void → treated as handled when open)
+    await page.keyboard.press('Escape');
+    await expect(page.locator('app-mmu-risk-panel')).toHaveCount(0);
+
+    // Ctrl+A opens again
+    await page.keyboard.press('Control+KeyA');
+    await expect(page.locator('app-mmu-risk-panel')).toBeVisible();
+
+    // Ctrl+A toggles closed
+    await page.keyboard.press('Control+KeyA');
+    await expect(page.locator('app-mmu-risk-panel')).toHaveCount(0);
+
+    // Escape on a closed panel is a no-op (shortcut returns false → pass-through)
+    await page.keyboard.press('Escape');
+    await expect(page.locator('app-mmu-risk-panel')).toHaveCount(0);
+  });
+
   test('state is preserved across close/reopen', async ({ page }) => {
     await page.click('button:has-text("Open MMU Risk")');
     await page.waitForSelector('.ag-row');

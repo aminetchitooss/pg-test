@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
+import { useShortcut } from '../../../shared/shortcut/use-shortcut';
 import { MmuRiskStore } from '../../store/mmu-risk.store';
 import { MmuRiskPanelComponent } from '../mmu-risk-panel/mmu-risk-panel.component';
 
@@ -16,6 +17,17 @@ export class MmuRiskPageComponent {
 
   protected readonly isOpen = signal(false);
   private initialized = false;
+
+  constructor() {
+    useShortcut('ctrl+a', () => this.toggle());
+    useShortcut('escape', () => {
+      if (this.isOpen()) {
+        this.toggle();
+        return;
+      }
+      return false; // pass through when panel is closed
+    });
+  }
 
   toggle(): void {
     const next = !this.isOpen();

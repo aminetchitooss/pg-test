@@ -21,20 +21,16 @@ export class ShortcutService implements OnDestroy {
       return;
     }
 
-    this.sub = this.ngZone.runOutsideAngular(() => {
-      const keydown$ = fromEvent<KeyboardEvent>(this.document, 'keydown');
-
-      return keydown$
+    this.sub = this.ngZone.runOutsideAngular(() =>
+      fromEvent<KeyboardEvent>(this.document, 'keydown')
         .pipe(
           filter(() => !this.pauseCount),
           filter((ev) => !this.isEditableTarget(ev.target)),
           map((ev) => ({ ev, combo: normalizeEvent(ev) })),
           filter(({ combo }) => this.hasHandler(combo)),
         )
-        .subscribe(({ ev, combo }) => {
-          this.ngZone.run(() => this.dispatch(ev, combo));
-        });
-    });
+        .subscribe(({ ev, combo }) => this.dispatch(ev, combo)),
+    );
   }
 
   /** Register a handler. Newer registrations shadow older ones (LIFO). */

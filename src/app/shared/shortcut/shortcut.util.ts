@@ -68,7 +68,9 @@ export function normalizeEvent(event: KeyboardEvent): string {
   if (event.shiftKey) parts.push(MODIFIER_KEYS.Shift);
   if (event.altKey) parts.push(MODIFIER_KEYS.Alt);
 
-  parts.push(resolveKeyPart(event));
+  // event.code reflects the physical key regardless of OS modifier layout,
+  // so Alt+M produces "KeyM" on Mac (where event.key is "µ") just like Windows.
+  parts.push(event.code);
 
   return parts.join('.'); // e.g. "Control.Shift.KeyS"
 }
@@ -92,13 +94,3 @@ export function normalizeCombo(rawCombo: string): string {
     .join('.');
 }
 
-function resolveKeyPart(event: KeyboardEvent): string {
-  const key = event.key;
-  if (key.length === 1) {
-    const upper = key.toUpperCase();
-    if (/^[A-Z]$/.test(upper)) return `Key${upper}`;
-    if (/^[0-9]$/.test(upper)) return `Digit${upper}`;
-    return key;
-  }
-  return event.code;
-}

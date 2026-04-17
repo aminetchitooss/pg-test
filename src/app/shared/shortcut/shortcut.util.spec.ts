@@ -75,4 +75,11 @@ describe('normalizeEvent', () => {
     const ev = fakeEvent({ key: 's', code: 'KeyS', ctrlKey: true, shiftKey: true });
     expect(normalizeEvent(ev)).toBe(normalizeCombo('ctrl+shift+s'));
   });
+
+  it('uses event.code, not event.key (survives Mac Option-key remapping)', () => {
+    // On macOS pressing Alt+M produces event.key='µ' but event.code='KeyM'
+    const ev = fakeEvent({ key: 'µ', code: 'KeyM', altKey: true });
+    expect(normalizeEvent(ev)).toBe('Alt.KeyM');
+    expect(normalizeEvent(ev)).toBe(normalizeCombo('alt+m'));
+  });
 });
