@@ -1,5 +1,5 @@
-import { DOCUMENT, isPlatformBrowser } from '@angular/common';
-import { inject, Injectable, NgZone, OnDestroy, PLATFORM_ID } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import { inject, Injectable, NgZone, OnDestroy } from '@angular/core';
 import { fromEvent, Subscription } from 'rxjs';
 import { filter, map } from 'rxjs/operators';
 import { normalizeCombo, normalizeEvent, ShortcutHandler } from './shortcut.util';
@@ -8,7 +8,6 @@ import { normalizeCombo, normalizeEvent, ShortcutHandler } from './shortcut.util
 export class ShortcutService implements OnDestroy {
   private readonly ngZone = inject(NgZone);
   private readonly document = inject(DOCUMENT);
-  private readonly isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
 
   /** LIFO stack of handlers per normalized combo. */
   private readonly shortcuts = new Map<string, ShortcutHandler[]>();
@@ -16,11 +15,6 @@ export class ShortcutService implements OnDestroy {
   private readonly sub: Subscription | null;
 
   constructor() {
-    if (!this.isBrowser) {
-      this.sub = null;
-      return;
-    }
-
     this.sub = this.ngZone.runOutsideAngular(() =>
       fromEvent<KeyboardEvent>(this.document, 'keydown')
         .pipe(
