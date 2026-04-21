@@ -1,8 +1,8 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
-import type { MmuMultipliers, OverrideSource } from '../../models/mmu-risk.model';
+import type { MmuMultipliers, OverrideSource } from '../../contracts/model';
 
 @Component({
   selector: 'app-mmu-risk-controls',
@@ -13,29 +13,34 @@ import type { MmuMultipliers, OverrideSource } from '../../models/mmu-risk.model
 })
 export class MmuRiskControlsComponent {
   readonly multipliers = input.required<MmuMultipliers>();
-  readonly spreadCurves = input.required<string>();
+  readonly spreadCurves = input.required<string[]>();
   readonly override = input.required<OverrideSource>();
-  readonly inputsIncludeRiskColumns = input.required<boolean>();
   readonly riskLoading = input(false);
-  readonly configLoading = input(false);
+  readonly inputsLoading = input(false);
+  readonly exportLoading = input(false);
 
   readonly multipliersChange = output<MmuMultipliers>();
-  readonly spreadCurvesChange = output<string>();
+  readonly spreadCurvesChange = output<string[]>();
   readonly overrideChange = output<OverrideSource>();
-  readonly inputsIncludeRiskColumnsChange = output<boolean>();
   readonly refreshRisk = output<void>();
   readonly refreshInputs = output<void>();
   readonly exportPositions = output<void>();
 
-  onMultiplierChange(field: keyof MmuMultipliers, value: string): void {
-    const num = Number(value);
-    if (!Number.isNaN(num)) {
+  protected readonly spreadCurvesText = computed(() => this.spreadCurves().join(','));
+
+  onMultiplierChange(field: keyof MmuMultipliers, value: number | null | string): void {
+    const num = typeof value === 'number' ? value : Number(value);
+    if (Number.isFinite(num)) {
       this.multipliersChange.emit({ ...this.multipliers(), [field]: num });
     }
   }
 
-  onSpreadCurvesChange(value: string): void {
-    this.spreadCurvesChange.emit(value);
+  onSpreadCurvesInputChange(value: string): void {
+    const curves = value
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    this.spreadCurvesChange.emit(curves);
   }
 
   onOverrideToggle(checked: boolean): void {

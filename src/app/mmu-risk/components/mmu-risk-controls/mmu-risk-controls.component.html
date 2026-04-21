@@ -47,18 +47,20 @@
         <button
           mat-raised-button
           aria-label="Refresh Inputs"
-          [disabled]="configLoading()"
+          [disabled]="inputsLoading()"
           (click)="refreshInputs.emit()"
         >
-          {{ configLoading() ? 'Refreshing Inputs…' : 'Refresh Inputs' }}
+          {{ inputsLoading() ? 'Refreshing Inputs…' : 'Refresh Inputs' }}
         </button>
       </div>
       <button
         mat-raised-button
         class="export-button"
+        aria-label="Export Positions"
+        [disabled]="exportLoading()"
         (click)="exportPositions.emit()"
       >
-        Export Positions
+        {{ exportLoading() ? 'Exporting…' : 'Export Positions' }}
       </button>
       <div class="toggle-stack">
         <div class="override-toggle">
@@ -80,25 +82,17 @@
             >Inputs wins</span
           >
         </div>
-        <div class="include-risk-toggle">
-          <mat-slide-toggle
-            [checked]="inputsIncludeRiskColumns()"
-            (change)="inputsIncludeRiskColumnsChange.emit($event.checked)"
-            aria-label="Inputs response includes risk-overlap columns"
-          >
-            <span class="toggle-caption">Inputs includes risk columns</span>
-          </mat-slide-toggle>
-        </div>
       </div>
     </div>
   </fieldset>
 
   <fieldset class="control-group spread-curves">
-    <legend>Spread Curves [do not change]</legend>
+    <legend>Spread Curves</legend>
     <input
       type="text"
-      [ngModel]="spreadCurves()"
-      (ngModelChange)="onSpreadCurvesChange($event)"
+      [ngModel]="spreadCurvesText()"
+      (ngModelChange)="onSpreadCurvesInputChange($event)"
+      placeholder="1M,6M,12M,OIS"
       aria-label="Spread Curves"
     />
   </fieldset>

@@ -1,28 +1,25 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
-import type { MmuStatus } from '../../models/mmu-risk.model';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
 @Component({
   selector: 'app-mmu-risk-status-bar',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [],
   template: `
-    @if (status(); as s) {
-      <footer class="status-bar" role="status" aria-live="polite" aria-label="MMU risk status">
-        <span class="status-item"><strong>MMU:</strong> {{ s.mmuDirection }}</span>
-        <span class="status-item"
-          ><strong>Current snapshot time:</strong> {{ s.snapshotTime }}</span
-        >
-        <span class="status-item"
-          ><strong>Last publish time:</strong> {{ s.lastPublishTime }}</span
-        >
-        <span class="status-item"
-          ><strong>Last published by:</strong> {{ s.lastPublishedBy }}</span
-        >
-        <span class="status-item"><strong>Comment:</strong> {{ s.comment }}</span>
-        @for (warning of s.warnings; track warning) {
-          <span class="status-warning" role="alert">{{ warning }}</span>
-        }
-      </footer>
-    }
+    <footer class="status-bar" role="status" aria-live="polite" aria-label="MMU risk status">
+      <span class="status-item"><strong>MMU:</strong> {{ mmuName() || '—' }}</span>
+      <span class="status-item"
+        ><strong>Snapshot:</strong> {{ snapshotLabel() }}</span
+      >
+      <span class="status-item"
+        ><strong>Last publish:</strong> {{ publishLabel() }}</span
+      >
+      <span class="status-item"
+        ><strong>Last published by:</strong> {{ lastPublishedBy() || '—' }}</span
+      >
+      @if (comment()) {
+        <span class="status-item"><strong>Comment:</strong> {{ comment() }}</span>
+      }
+    </footer>
   `,
   styles: `
     .status-bar {
@@ -40,14 +37,24 @@ import type { MmuStatus } from '../../models/mmu-risk.model';
     .status-item {
       white-space: nowrap;
     }
-
-    .status-warning {
-      margin-left: auto;
-      color: var(--app-error-color, #d32f2f);
-      font-weight: 500;
-    }
   `,
 })
 export class MmuRiskStatusBarComponent {
-  readonly status = input<MmuStatus | null>(null);
+  readonly mmuName = input<string | null>(null);
+  readonly snapshotTime = input<Date | null>(null);
+  readonly lastPublishTime = input<Date | null>(null);
+  readonly lastPublishedBy = input<string>('');
+  readonly comment = input<string>('');
+
+  protected readonly snapshotLabel = computed(() => formatDate(this.snapshotTime()));
+  protected readonly publishLabel = computed(() => formatDate(this.lastPublishTime()));
+}
+
+function formatDate(d: Date | null): string {
+  if (!d) return '—';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  );
 }

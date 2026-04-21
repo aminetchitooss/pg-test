@@ -55,3 +55,50 @@ app-mmu-risk-grid {
   font-size: 1rem;
   color: var(--app-error-color, #d32f2f);
 }
+
+.empty-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  font-size: 1rem;
+  color: var(--app-text-muted, #666);
+  text-align: center;
+  padding: 0 16px;
+}
+
+.export-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  border-bottom: 1px solid var(--app-border-muted, #b0b0b0);
+
+  &.success {
+    background: #e8f5e8;
+    color: #1b5e20;
+  }
+
+  &.error {
+    background: #fdecea;
+    color: #b71c1c;
+  }
+
+  .banner-dismiss {
+    background: transparent;
+    border: 0;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    color: inherit;
+    padding: 2px 6px;
+    border-radius: 3px;
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(0, 0, 0, 0.08);
+    }
+  }
+}

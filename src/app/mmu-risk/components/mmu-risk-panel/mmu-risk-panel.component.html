@@ -1,37 +1,71 @@
 <section class="panel" aria-labelledby="mmu-risk-panel-title">
   <header class="panel-header">
-    <h2 id="mmu-risk-panel-title">
-      Feed Position Targets [MMU: {{ store.status()?.mmuDirection ?? 'Long' }}]
-    </h2>
+    <h2 id="mmu-risk-panel-title">Feed Position Targets [MMU: {{ store.mmuName() || '—' }}]</h2>
   </header>
 
   <app-mmu-risk-controls
     [multipliers]="store.multipliers()"
     [spreadCurves]="store.spreadCurves()"
     [override]="store.override()"
-    [inputsIncludeRiskColumns]="store.inputsIncludeRiskColumns()"
     [riskLoading]="store.riskLoading()"
-    [configLoading]="store.configLoading()"
+    [inputsLoading]="store.inputsLoading()"
+    [exportLoading]="store.exportLoading()"
     (multipliersChange)="onMultipliersChange($event)"
     (spreadCurvesChange)="onSpreadCurvesChange($event)"
     (overrideChange)="onOverrideChange($event)"
-    (inputsIncludeRiskColumnsChange)="store.setInputsIncludeRiskColumns($event)"
     (refreshRisk)="store.refreshRisk()"
     (refreshInputs)="store.refreshInputs()"
-    (exportPositions)="exportCsv()"
+    (exportPositions)="store.exportPositions()"
   />
 
+  @if (store.exportStatus(); as exp) {
+    @if (exp.success) {
+      <div class="export-banner success" role="status" aria-live="polite">
+        <span>Positions exported successfully.</span>
+        <button
+          type="button"
+          class="banner-dismiss"
+          aria-label="Dismiss export message"
+          (click)="store.dismissExportStatus()"
+        >
+          ×
+        </button>
+      </div>
+    } @else {
+      <div class="export-banner error" role="alert">
+        <span>Export failed: {{ exp.error }}</span>
+        <button
+          type="button"
+          class="banner-dismiss"
+          aria-label="Dismiss export message"
+          (click)="store.dismissExportStatus()"
+        >
+          ×
+        </button>
+      </div>
+    }
+  }
+
   @if (store.error(); as error) {
-    <div class="error-message" role="alert">Failed to load data. Please try refreshing.</div>
-  } @else if (store.columns().length > 0) {
+    <div class="error-message" role="alert">Failed to load data: {{ error }}</div>
+  } @else if (store.isLoading() && !store.hasRows()) {
+    <div class="loading-placeholder" role="status" aria-label="Loading">Loading data...</div>
+  } @else if (store.hasRows()) {
     <app-mmu-risk-grid
-      [columns]="store.columns()"
-      [rows]="store.rows()"
+      [rows]="store.mergedRows()"
       (cellValueChanged)="onCellValueChanged($event)"
     />
   } @else {
-    <div class="loading-placeholder" role="status" aria-label="Loading">Loading data...</div>
+    <div class="empty-placeholder" role="status">
+      No positions returned for this MMU. Click Refresh Risk or Refresh Inputs.
+    </div>
   }
 
-  <app-mmu-risk-status-bar [status]="store.status()" />
+  <app-mmu-risk-status-bar
+    [mmuName]="store.mmuName()"
+    [snapshotTime]="store.snapshotTime()"
+    [lastPublishTime]="store.lastPublishTime()"
+    [lastPublishedBy]="store.lastPublishedBy()"
+    [comment]="store.comment()"
+  />
 </section>

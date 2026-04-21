@@ -1,10 +1,22 @@
-import { ChangeDetectionStrategy, Component, inject, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import type { CellValueChangedEvent } from 'ag-grid-community';
-import type { MmuMultipliers, OverrideSource } from '../../models/mmu-risk.model';
+import type {
+  EditableMergedRowField,
+  MergedRow,
+  MmuMultipliers,
+  OverrideSource,
+} from '../../contracts/model';
 import { MmuRiskStore } from '../../store/mmu-risk.store';
 import { MmuRiskControlsComponent } from '../mmu-risk-controls/mmu-risk-controls.component';
 import { MmuRiskGridComponent } from '../mmu-risk-grid/mmu-risk-grid.component';
 import { MmuRiskStatusBarComponent } from '../mmu-risk-status-bar/mmu-risk-status-bar.component';
+
+const EDITABLE_FIELDS: ReadonlySet<EditableMergedRowField> = new Set([
+  'manualAdjustment',
+  'adjustedReflexPosition',
+  'targetPosition',
+  'adjustedEPosition',
+]);
 
 @Component({
   selector: 'app-mmu-risk-panel',
@@ -15,29 +27,30 @@ import { MmuRiskStatusBarComponent } from '../mmu-risk-status-bar/mmu-risk-statu
 })
 export class MmuRiskPanelComponent {
   protected readonly store = inject(MmuRiskStore);
-  private readonly grid = viewChild(MmuRiskGridComponent);
-
-  exportCsv(): void {
-    console.log('[mmu-risk] Export Positions clicked');
-    this.grid()?.exportCsv();
-  }
 
   onMultipliersChange(multipliers: MmuMultipliers): void {
     this.store.updateMultipliers(multipliers);
   }
 
-  onSpreadCurvesChange(value: string): void {
-    this.store.updateSpreadCurves(value);
+  onSpreadCurvesChange(value: string[]): void {
+    this.store.setSpreadCurves(value);
   }
 
   onOverrideChange(source: OverrideSource): void {
     this.store.setOverride(source);
   }
 
-  onCellValueChanged(event: CellValueChangedEvent): void {
-    const tenor = event.data?.['qualifiedTenor'];
-    if (typeof tenor === 'string') {
-      this.store.updateRow(tenor, { ...event.data });
+  onCellValueChanged(event: CellValueChangedEvent<MergedRow>): void {
+    const tenor = event.data?.tenor;
+    const field = event.colDef.field as keyof MergedRow | undefined;
+    const value = Number(event.newValue);
+    if (
+      tenor &&
+      field &&
+      EDITABLE_FIELDS.has(field as EditableMergedRowField) &&
+      Number.isFinite(value)
+    ) {
+      this.store.updatePositionTargetField(tenor, field as EditableMergedRowField, value);
     }
   }
 }

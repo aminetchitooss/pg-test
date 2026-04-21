@@ -1,61 +1,96 @@
-import { expect, test } from '@playwright/test';
+import { expect, Page, test } from '@playwright/test';
 
-test.describe('MMU Risk Page', () => {
-  test.beforeEach(async ({ page }) => {
+async function openDialog(page: Page): Promise<void> {
+  await page.goto('/mmu-risk');
+  await page.waitForSelector('button:has-text("Open MMU Risk")');
+  await page.click('button:has-text("Open MMU Risk")');
+  await page.waitForSelector('mat-dialog-container');
+}
+
+async function selectMmuAndProceed(page: Page, mmuName: string): Promise<void> {
+  await page.locator('mat-dialog-container mat-select').click();
+  await page.locator('mat-option', { hasText: mmuName }).click();
+  await page.click('mat-dialog-container button[aria-label="Proceed with selected MMU"]');
+  await page.waitForSelector('mat-dialog-container', { state: 'detached' });
+  await page.waitForSelector('app-mmu-risk-panel');
+  await page.waitForSelector('.ag-row');
+}
+
+test.describe('MMU Risk — modal gate flow', () => {
+  test('panel is hidden until Open MMU Risk is clicked', async ({ page }) => {
     await page.goto('/mmu-risk');
     await page.waitForSelector('button:has-text("Open MMU Risk")');
-  });
-
-  test('panel is hidden by default and toggles inline on click', async ({ page }) => {
     await expect(page.locator('app-mmu-risk-panel')).toHaveCount(0);
-
-    const toggleBtn = page.locator('button', { hasText: /Open MMU Risk|Close MMU Risk/ });
-    await toggleBtn.click();
-    await expect(page.locator('app-mmu-risk-panel')).toBeVisible();
-    await expect(toggleBtn).toHaveText(/Close MMU Risk/);
-
-    await toggleBtn.click();
-    await expect(page.locator('app-mmu-risk-panel')).toHaveCount(0);
-    await expect(toggleBtn).toHaveText(/Open MMU Risk/);
-  });
-
-  test('no Material dialog container is created', async ({ page }) => {
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('app-mmu-risk-panel');
     await expect(page.locator('mat-dialog-container')).toHaveCount(0);
   });
 
-  test('renders merged columns with no duplicates', async ({ page }) => {
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('.ag-root-wrapper');
-    await page.waitForSelector('.ag-row');
-
-    const expected = [
-      'Qualified Tenor',
-      'Reflex Position',
-      'Adjusted Reflex Position (K units)',
-      'Manual Adjustment (K Units)',
-      'Target Position (K Units)',
-      'Adjusted e-Position',
-      'CVA Exposure (K Units)',
-    ];
-    for (const header of expected) {
-      const escaped = header.replace(/[()]/g, '\\$&');
-      await expect(
-        page.locator('.ag-header-cell-text', { hasText: new RegExp(`^${escaped}$`) }),
-      ).toBeVisible();
-    }
-
-    const headerCount = await page.locator('.ag-header-cell').count();
-    expect(headerCount).toBe(expected.length);
+  test('clicking Open MMU Risk opens the selector dialog (not the panel)', async ({ page }) => {
+    await openDialog(page);
+    await expect(page.locator('mat-dialog-container')).toBeVisible();
+    await expect(page.locator('mat-dialog-container h2')).toHaveText(/Select MMU/i);
+    await expect(page.locator('app-mmu-risk-panel')).toHaveCount(0);
   });
 
-  test('renders rows with data merged from both sources', async ({ page }) => {
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('.ag-row');
+  test('dialog lists MMU names from user-mappings API', async ({ page }) => {
+    await openDialog(page);
+    await page.locator('mat-dialog-container mat-select').click();
+    const options = page.locator('mat-option');
+    await expect(options).toHaveCount(3);
+    await expect(options.nth(0)).toHaveText(/EUR_SWAP_DESK/);
+    await expect(options.nth(1)).toHaveText(/USD_RATES_DESK/);
+    await expect(options.nth(2)).toHaveText(/GBP_GILTS_DESK/);
+  });
 
+  test('Proceed is disabled until an MMU is selected', async ({ page }) => {
+    await openDialog(page);
+    const proceed = page.locator('button[aria-label="Proceed with selected MMU"]');
+    await expect(proceed).toBeDisabled();
+    await page.locator('mat-dialog-container mat-select').click();
+    await page.locator('mat-option', { hasText: 'EUR_SWAP_DESK' }).click();
+    await expect(proceed).toBeEnabled();
+  });
+
+  test('Cancel closes dialog without revealing the panel', async ({ page }) => {
+    await openDialog(page);
+    await page.click('mat-dialog-container button[aria-label="Cancel MMU selection"]');
+    await expect(page.locator('mat-dialog-container')).toHaveCount(0);
+    await expect(page.locator('app-mmu-risk-panel')).toHaveCount(0);
+  });
+
+  test('Proceed closes dialog and reveals the grid panel', async ({ page }) => {
+    await openDialog(page);
+    await selectMmuAndProceed(page, 'EUR_SWAP_DESK');
+    await expect(page.locator('app-mmu-risk-panel')).toBeVisible();
+    await expect(page.locator('mat-dialog-container')).toHaveCount(0);
+  });
+});
+
+test.describe('MMU Risk — panel after MMU selection', () => {
+  test.beforeEach(async ({ page }) => {
+    await openDialog(page);
+    await selectMmuAndProceed(page, 'EUR_SWAP_DESK');
+  });
+
+  test('header reflects the selected MMU name', async ({ page }) => {
+    await expect(page.locator('#mmu-risk-panel-title')).toContainText('EUR_SWAP_DESK');
+  });
+
+  test('grid renders the contract columns (static, no dynamic schema)', async ({ page }) => {
+    const expected = [
+      'Tenor',
+      'Reflex Position',
+      'Manual Adjustment',
+      'Adjusted Reflex Position',
+      'Target Position',
+      'Adjusted E-Position',
+    ];
+    const headers = await page.locator('.ag-header-cell-text').allTextContents();
+    expect(headers).toEqual(expected);
+  });
+
+  test('renders rows keyed by tenor with parsed numeric values', async ({ page }) => {
     const firstTenor = await page
-      .locator('.ag-row[row-index="0"] .ag-cell[col-id="qualifiedTenor"]')
+      .locator('.ag-row[row-index="0"] .ag-cell[col-id="tenor"]')
       .textContent();
     expect(firstTenor).toContain('Delta_O/N');
 
@@ -63,17 +98,11 @@ test.describe('MMU Risk Page', () => {
       .locator('.ag-row[row-index="0"] .ag-cell[col-id="reflexPosition"]')
       .textContent();
     expect(reflex?.trim()).toBe('3');
-
-    const manualAdjustment = await page
-      .locator('.ag-row[row-index="0"] .ag-cell[col-id="manualAdjustment"]')
-      .textContent();
-    expect(manualAdjustment?.trim()).toBe('0');
   });
 
-  test('displays multiplier, spread curves and override toggle defaults', async ({ page }) => {
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('.ag-root-wrapper');
-
+  test('controls show defaults: multipliers=1, spread curves seeded, override=risk', async ({
+    page,
+  }) => {
     await expect(page.locator('input[aria-label="Reflex Position Multiplier"]')).toHaveValue('1');
     await expect(page.locator('input[aria-label="Manual Adjustment Multiplier"]')).toHaveValue('1');
     await expect(page.locator('input[aria-label="Target Position Multiplier"]')).toHaveValue('1');
@@ -84,301 +113,79 @@ test.describe('MMU Risk Page', () => {
     await expect(page.locator('.override-label.active', { hasText: 'Risk wins' })).toBeVisible();
   });
 
-  test('Export Positions triggers CSV download', async ({ page }) => {
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('.ag-row');
-
-    const downloadPromise = page.waitForEvent('download');
-    await page.click('button:has-text("Export Positions")');
-    const download = await downloadPromise;
-    expect(download.suggestedFilename()).toBe('mmu-risk-positions.csv');
-  });
-
-  test('Refresh Risk button remains clickable after load', async ({ page }) => {
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('.ag-row');
-    const refreshRisk = page.locator('button[aria-label="Refresh Risk"]');
-    await expect(refreshRisk).toBeEnabled();
-    await refreshRisk.click();
-    await page.waitForTimeout(400);
-    await expect(refreshRisk).toBeEnabled();
-  });
-
-  test('Refresh Inputs button remains clickable after load', async ({ page }) => {
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('.ag-row');
-    const refreshInputs = page.locator('button[aria-label="Refresh Inputs"]');
-    await expect(refreshInputs).toBeEnabled();
-    await refreshInputs.click();
-    await page.waitForTimeout(450);
-    await expect(refreshInputs).toBeEnabled();
-  });
-
-  test('override toggle flips active label between Risk wins and Inputs wins', async ({ page }) => {
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('.ag-row');
-
+  test('override toggle flips active label and keeps the same columns', async ({ page }) => {
     await expect(page.locator('.override-label.active', { hasText: 'Risk wins' })).toBeVisible();
-
-    const toggleSwitch = page.locator('button[role="switch"][aria-label*="Override source"]');
-    await toggleSwitch.click();
-
+    const toggle = page.locator('button[role="switch"][aria-label*="Override source"]');
+    await toggle.click();
     await expect(page.locator('.override-label.active', { hasText: 'Inputs wins' })).toBeVisible();
-    await expect(toggleSwitch).toHaveAttribute('aria-checked', 'true');
-
     const headerCount = await page.locator('.ag-header-cell').count();
-    expect(headerCount).toBe(7);
+    expect(headerCount).toBe(6);
   });
 
-  test('column order is stable across override toggle (Risk columns stay leftmost)', async ({
-    page,
-  }) => {
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('.ag-row');
-
-    const headersBefore = await page.locator('.ag-header-cell-text').allTextContents();
-    expect(headersBefore.slice(0, 3)).toEqual([
-      'Qualified Tenor',
-      'Reflex Position',
-      'Adjusted Reflex Position (K units)',
-    ]);
-
-    await page.locator('button[role="switch"][aria-label*="Override source"]').click();
-    await expect(page.locator('.override-label.active', { hasText: 'Inputs wins' })).toBeVisible();
-
-    const headersAfter = await page.locator('.ag-header-cell-text').allTextContents();
-    expect(headersAfter).toEqual(headersBefore);
-  });
-
-  test('status bar shows MMU info and warning', async ({ page }) => {
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('.ag-root-wrapper');
-
-    const statusBar = page.locator('app-mmu-risk-status-bar');
-    await expect(statusBar).toBeVisible();
-    await expect(statusBar.locator('text=MMU:')).toBeVisible();
-    await expect(statusBar.locator('text=Long')).toBeVisible();
-    await expect(statusBar.locator('.status-warning')).toContainText(
-      'Some tenors could not be matched with saved data',
-    );
-  });
-
-  test('config manager column schema varies across Refresh Inputs calls', async ({ page }) => {
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('.ag-row');
-
-    const initialHeaders = await page.locator('.ag-header-cell-text').allTextContents();
-
-    await page.click('button[aria-label="Refresh Inputs"]');
-    await page.waitForTimeout(500);
-    const secondHeaders = await page.locator('.ag-header-cell-text').allTextContents();
-
-    expect(secondHeaders).not.toEqual(initialHeaders);
-
-    await page.click('button[aria-label="Refresh Inputs"]');
-    await page.waitForTimeout(500);
-    const thirdHeaders = await page.locator('.ag-header-cell-text').allTextContents();
-
-    expect(thirdHeaders).not.toEqual(secondHeaders);
-
-    for (const headers of [initialHeaders, secondHeaders, thirdHeaders]) {
-      expect(headers[0]).toBe('Qualified Tenor');
-      expect(new Set(headers).size).toBe(headers.length);
-    }
-
-    expect(secondHeaders.length).toBe(initialHeaders.length);
-    expect(thirdHeaders.length).toBe(initialHeaders.length);
-  });
-
-  test('inputs-include-risk-columns toggle marks overlapping columns as (mutual)', async ({
-    page,
-  }) => {
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('.ag-row');
-
-    const initial = await page.locator('.ag-header-cell-text').allTextContents();
-    expect(initial).toContain('Reflex Position');
-    expect(initial).toContain('Adjusted Reflex Position (K units)');
-    expect(initial.some((h) => h.includes('(mutual)'))).toBe(false);
-
-    const includeToggle = page.locator(
-      'button[role="switch"][aria-label*="Inputs response includes risk-overlap"]',
-    );
-    await expect(includeToggle).toHaveAttribute('aria-checked', 'false');
-    await includeToggle.click();
-    await expect(includeToggle).toHaveAttribute('aria-checked', 'true');
-
-    await page.click('button[aria-label="Refresh Inputs"]');
-    await page.waitForTimeout(500);
-
-    const afterOn = await page.locator('.ag-header-cell-text').allTextContents();
-    expect(afterOn).toContain('Reflex Position (mutual)');
-    expect(afterOn).toContain('Adjusted Reflex Position (K units) (mutual)');
-    expect(new Set(afterOn).size).toBe(afterOn.length);
-
-    await includeToggle.click();
-    await expect(includeToggle).toHaveAttribute('aria-checked', 'false');
-    await page.click('button[aria-label="Refresh Inputs"]');
-    await page.waitForTimeout(500);
-
-    const afterOff = await page.locator('.ag-header-cell-text').allTextContents();
-    expect(afterOff).toContain('Reflex Position');
-    expect(afterOff.some((h) => h.includes('(mutual)'))).toBe(false);
-  });
-
-  test('merged column count is stable across toggles and Refresh Inputs (no layout shift)', async ({
-    page,
-  }) => {
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('.ag-row');
-
-    const STABLE_COUNT = 7;
-    const headerCount = () => page.locator('.ag-header-cell').count();
-
-    expect(await headerCount()).toBe(STABLE_COUNT);
-
-    // Cycle Refresh Inputs through every schema in the "without overlap" pool.
-    for (let i = 0; i < 4; i++) {
-      await page.click('button[aria-label="Refresh Inputs"]');
-      await page.waitForTimeout(450);
-      expect(await headerCount()).toBe(STABLE_COUNT);
-    }
-
-    // Turn on include-risk-columns and cycle through that pool too.
-    const includeToggle = page.locator(
-      'button[role="switch"][aria-label*="Inputs response includes risk-overlap"]',
-    );
-    await includeToggle.click();
-    for (let i = 0; i < 4; i++) {
-      await page.click('button[aria-label="Refresh Inputs"]');
-      await page.waitForTimeout(450);
-      expect(await headerCount()).toBe(STABLE_COUNT);
-    }
-
-    // Flip the override toggle as well — column count must not move.
-    await page
-      .locator('button[role="switch"][aria-label*="Override source"]')
-      .click();
-    expect(await headerCount()).toBe(STABLE_COUNT);
-  });
-
-  test('refresh buttons do not change width between idle and loading states', async ({ page }) => {
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('.ag-row');
-
+  test('Refresh Risk stays clickable and updates snapshot', async ({ page }) => {
     const refreshRisk = page.locator('button[aria-label="Refresh Risk"]');
-    const refreshInputs = page.locator('button[aria-label="Refresh Inputs"]');
-
-    const widthOf = (locator: ReturnType<typeof page.locator>) =>
-      locator.evaluate((el) => Math.round(el.getBoundingClientRect().width));
-
-    const riskIdle = await widthOf(refreshRisk);
-    const inputsIdle = await widthOf(refreshInputs);
-
+    await expect(refreshRisk).toBeEnabled();
     await refreshRisk.click();
     await expect(refreshRisk).toHaveText(/Refreshing Risk/);
-    const riskLoading = await widthOf(refreshRisk);
-    expect(Math.abs(riskLoading - riskIdle)).toBeLessThanOrEqual(1);
-
     await expect(refreshRisk).toBeEnabled();
-
-    await refreshInputs.click();
-    await expect(refreshInputs).toHaveText(/Refreshing Inputs/);
-    const inputsLoading = await widthOf(refreshInputs);
-    expect(Math.abs(inputsLoading - inputsIdle)).toBeLessThanOrEqual(1);
+    await expect(refreshRisk).toHaveText(/^\s*Refresh Risk\s*$/);
   });
 
-  test('each refresh button has independent loading state + label flip', async ({ page }) => {
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('.ag-row');
-
+  test('Refresh Inputs stays clickable independently of Refresh Risk', async ({ page }) => {
     const refreshRisk = page.locator('button[aria-label="Refresh Risk"]');
     const refreshInputs = page.locator('button[aria-label="Refresh Inputs"]');
-
-    await expect(refreshRisk).toHaveText(/^\s*Refresh Risk\s*$/);
-    await expect(refreshInputs).toHaveText(/^\s*Refresh Inputs\s*$/);
-
-    await refreshRisk.click();
-    await expect(refreshRisk).toBeDisabled();
-    await expect(refreshRisk).toHaveText(/Refreshing Risk/);
-    await expect(refreshInputs).toBeEnabled();
-    await expect(refreshInputs).toHaveText(/^\s*Refresh Inputs\s*$/);
-
-    await expect(refreshRisk).toBeEnabled();
-    await expect(refreshRisk).toHaveText(/^\s*Refresh Risk\s*$/);
-
     await refreshInputs.click();
     await expect(refreshInputs).toBeDisabled();
-    await expect(refreshInputs).toHaveText(/Refreshing Inputs/);
     await expect(refreshRisk).toBeEnabled();
-    await expect(refreshRisk).toHaveText(/^\s*Refresh Risk\s*$/);
+    await expect(refreshInputs).toBeEnabled();
   });
 
-  test('Refresh Risk does NOT trigger Refresh Inputs (ports are independent)', async ({
-    page,
-  }) => {
+  test('spread curves input is editable (no longer read-only)', async ({ page }) => {
+    const input = page.locator('input[aria-label="Spread Curves"]');
+    await expect(input).toBeEditable();
+    await input.fill('2Y,5Y,10Y');
+    await expect(input).toHaveValue('2Y,5Y,10Y');
+  });
+
+  test('Export Positions surfaces a success banner (no CSV download)', async ({ page }) => {
+    const downloads: string[] = [];
+    page.on('download', (d) => downloads.push(d.suggestedFilename()));
+
+    await page.click('button[aria-label="Export Positions"]');
+    await expect(page.locator('.export-banner.success')).toContainText(
+      'Positions exported successfully',
+    );
+    expect(downloads).toEqual([]);
+  });
+
+  test('status bar shows MMU name and snapshot timestamp, no direction badge', async ({ page }) => {
+    const statusBar = page.locator('app-mmu-risk-status-bar');
+    await expect(statusBar).toBeVisible();
+    await expect(statusBar).toContainText('MMU:');
+    await expect(statusBar).toContainText('EUR_SWAP_DESK');
+    await expect(statusBar).toContainText('Snapshot:');
+    await expect(statusBar).toContainText('Last publish:');
+    await expect(statusBar).not.toContainText(/\bLong\b/);
+    await expect(statusBar).not.toContainText(/\bShort\b/);
+    await expect(statusBar).not.toContainText(/\bFlat\b/);
+  });
+
+  test('no include-risk-columns toggle exists (feature removed)', async ({ page }) => {
+    await expect(
+      page.locator('[aria-label*="Inputs response includes risk-overlap columns"]'),
+    ).toHaveCount(0);
+  });
+
+  test('close + reopen triggers the dialog again', async ({ page }) => {
+    await page.click('button:has-text("Close MMU Risk")');
+    await expect(page.locator('app-mmu-risk-panel')).toHaveCount(0);
+
     await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('.ag-row');
-
-    const configOnlyFields = [
-      'manualAdjustment',
-      'targetPosition',
-      'adjustedEPosition',
-      'cvaExposure',
-      'hedgeRatio',
-    ];
-
-    const readConfigHeaders = async () => {
-      const all = await page.locator('.ag-header-cell-text').allTextContents();
-      return all.filter((h) =>
-        configOnlyFields.some((f) => h.toLowerCase().includes(f.replace(/([A-Z])/g, ' $1').toLowerCase().trim())),
-      );
-    };
-
-    const readConfigCellsRow0 = async () => {
-      const cells: Record<string, string> = {};
-      for (const field of configOnlyFields) {
-        const cell = page.locator(`.ag-row[row-index="0"] .ag-cell[col-id="${field}"]`);
-        if ((await cell.count()) > 0) {
-          cells[field] = (await cell.textContent())?.trim() ?? '';
-        }
-      }
-      return cells;
-    };
-
-    const headersBefore = await readConfigHeaders();
-    const cellsBefore = await readConfigCellsRow0();
-    expect(headersBefore.length).toBeGreaterThan(0);
-    expect(Object.keys(cellsBefore).length).toBeGreaterThan(0);
-
-    // Hit Refresh Risk three times — if it secretly invoked Refresh Inputs,
-    // the config schema pool would cycle (different header identities and
-    // non-zero randomised manualAdjustment values would surface).
-    for (let i = 0; i < 3; i++) {
-      await page.click('button[aria-label="Refresh Risk"]');
-      await page.waitForTimeout(400);
-    }
-
-    const headersAfter = await readConfigHeaders();
-    const cellsAfter = await readConfigCellsRow0();
-
-    expect(headersAfter).toEqual(headersBefore);
-    expect(cellsAfter).toEqual(cellsBefore);
-
-    // Sanity check the opposite direction: Refresh Inputs DOES change the
-    // config schema pool, so after clicking it we expect at least one config
-    // header or value to differ.
-    await page.click('button[aria-label="Refresh Inputs"]');
-    await page.waitForTimeout(500);
-    const headersAfterInputs = await readConfigHeaders();
-    const cellsAfterInputs = await readConfigCellsRow0();
-    const somethingChanged =
-      JSON.stringify(headersAfterInputs) !== JSON.stringify(headersBefore) ||
-      JSON.stringify(cellsAfterInputs) !== JSON.stringify(cellsBefore);
-    expect(somethingChanged).toBe(true);
+    await expect(page.locator('mat-dialog-container')).toBeVisible();
+    await page.click('mat-dialog-container button[aria-label="Cancel MMU selection"]');
   });
 
-  test('logs a message when each button is clicked', async ({ page }) => {
+  test('logs events for refresh, override, export, close', async ({ page }) => {
     const logs: string[] = [];
     page.on('console', (msg) => {
       if (msg.type() === 'log' && msg.text().includes('[mmu-risk]')) {
@@ -386,78 +193,50 @@ test.describe('MMU Risk Page', () => {
       }
     });
 
-    await page.goto('/mmu-risk');
-    await page.waitForSelector('button:has-text("Open MMU Risk")');
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('.ag-row');
-
     await page.click('button[aria-label="Refresh Risk"]');
-    await page.waitForTimeout(400);
+    await expect(page.locator('button[aria-label="Refresh Risk"]')).toBeEnabled();
     await page.click('button[aria-label="Refresh Inputs"]');
-    await page.waitForTimeout(450);
-
-    await page
-      .locator('button[role="switch"][aria-label*="Override source"]')
-      .click();
-    await page
-      .locator('button[role="switch"][aria-label*="Inputs response includes risk-overlap"]')
-      .click();
-
-    const downloadPromise = page.waitForEvent('download');
-    await page.click('button:has-text("Export Positions")');
-    await downloadPromise;
-
+    await expect(page.locator('button[aria-label="Refresh Inputs"]')).toBeEnabled();
+    await page.locator('button[role="switch"][aria-label*="Override source"]').click();
+    await page.click('button[aria-label="Export Positions"]');
+    await expect(page.locator('.export-banner.success')).toBeVisible();
     await page.click('button:has-text("Close MMU Risk")');
 
     const joined = logs.join('\n');
-    expect(joined).toContain('[mmu-risk] Open MMU Risk clicked');
     expect(joined).toContain('[mmu-risk] Refresh Risk clicked');
     expect(joined).toContain('[mmu-risk] Refresh Inputs clicked');
     expect(joined).toContain('[mmu-risk] Override toggle changed');
-    expect(joined).toContain('[mmu-risk] Include risk columns toggle changed');
     expect(joined).toContain('[mmu-risk] Export Positions clicked');
     expect(joined).toContain('[mmu-risk] Close MMU Risk clicked');
   });
+});
 
-  test('keyboard shortcuts toggle and close the panel', async ({ page }) => {
+test.describe('MMU Risk — logging during selection', () => {
+  test('logs MMU selected when user picks one and clicks Proceed', async ({ page }) => {
+    const logs: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'log' && msg.text().includes('[mmu-risk]')) {
+        logs.push(msg.text());
+      }
+    });
+    await openDialog(page);
+    await selectMmuAndProceed(page, 'USD_RATES_DESK');
+    const joined = logs.join('\n');
+    expect(joined).toContain('[mmu-risk] Open MMU Risk clicked');
+    expect(joined).toContain('[mmu-risk] MMU selected');
+    expect(joined).toContain('USD_RATES_DESK');
+  });
+});
+
+test.describe('MMU Risk — keyboard shortcuts', () => {
+  test('Ctrl+A opens the dialog, Escape closes it', async ({ page }) => {
     await page.goto('/mmu-risk');
     await page.waitForSelector('button:has-text("Open MMU Risk")');
 
-    await expect(page.locator('app-mmu-risk-panel')).toHaveCount(0);
-
-    // Ctrl+A opens
     await page.keyboard.press('Control+KeyA');
-    await expect(page.locator('app-mmu-risk-panel')).toBeVisible();
+    await expect(page.locator('mat-dialog-container')).toBeVisible();
 
-    // Escape closes (pass-through handler returns void → treated as handled when open)
     await page.keyboard.press('Escape');
-    await expect(page.locator('app-mmu-risk-panel')).toHaveCount(0);
-
-    // Ctrl+A opens again
-    await page.keyboard.press('Control+KeyA');
-    await expect(page.locator('app-mmu-risk-panel')).toBeVisible();
-
-    // Ctrl+A toggles closed
-    await page.keyboard.press('Control+KeyA');
-    await expect(page.locator('app-mmu-risk-panel')).toHaveCount(0);
-
-    // Escape on a closed panel is a no-op (shortcut returns false → pass-through)
-    await page.keyboard.press('Escape');
-    await expect(page.locator('app-mmu-risk-panel')).toHaveCount(0);
-  });
-
-  test('state is preserved across close/reopen', async ({ page }) => {
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('.ag-row');
-
-    await page.locator('button[role="switch"][aria-label*="Override source"]').click();
-    await expect(page.locator('.override-label.active', { hasText: 'Inputs wins' })).toBeVisible();
-
-    await page.click('button:has-text("Close MMU Risk")');
-    await expect(page.locator('app-mmu-risk-panel')).toHaveCount(0);
-
-    await page.click('button:has-text("Open MMU Risk")');
-    await page.waitForSelector('app-mmu-risk-panel');
-    await expect(page.locator('.override-label.active', { hasText: 'Inputs wins' })).toBeVisible();
+    await expect(page.locator('mat-dialog-container')).toHaveCount(0);
   });
 });

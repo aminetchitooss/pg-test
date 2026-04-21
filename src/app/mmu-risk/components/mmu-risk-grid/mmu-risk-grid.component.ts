@@ -2,7 +2,6 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
-  computed,
   inject,
   input,
   output,
@@ -16,10 +15,76 @@ import type {
   SizeColumnsToFitGridStrategy,
 } from 'ag-grid-community';
 import { appGridTheme } from '../../../shared/grid/grid-theme';
-import type { ColumnMeta, DataRow } from '../../models/mmu-risk.model';
+import type { MergedRow } from '../../contracts/model';
 
 const EDITABLE_EVEN_COLOR = '#fdf6e3';
 const EDITABLE_ODD_COLOR = '#fef9ec';
+
+function editableCellStyle(params: { node: { rowIndex: number | null } }): Record<string, string> {
+  const isOdd = (params.node.rowIndex ?? 0) % 2 !== 0;
+  return {
+    textAlign: 'right',
+    backgroundColor: isOdd ? EDITABLE_ODD_COLOR : EDITABLE_EVEN_COLOR,
+  };
+}
+
+const numericFormatter = (params: { value: unknown }): string =>
+  params.value != null ? Number(params.value).toLocaleString() : '';
+
+const COLUMN_DEFS: ColDef<MergedRow>[] = [
+  {
+    field: 'tenor',
+    headerName: 'Tenor',
+    editable: false,
+    minWidth: 280,
+    flex: 1,
+  },
+  {
+    field: 'reflexPosition',
+    headerName: 'Reflex Position',
+    editable: true,
+    minWidth: 180,
+    flex: 1,
+    cellStyle: editableCellStyle,
+    valueFormatter: numericFormatter,
+  },
+  {
+    field: 'manualAdjustment',
+    headerName: 'Manual Adjustment',
+    editable: true,
+    minWidth: 180,
+    flex: 1,
+    cellStyle: editableCellStyle,
+    valueFormatter: numericFormatter,
+  },
+  {
+    field: 'adjustedReflexPosition',
+    headerName: 'Adjusted Reflex Position',
+    editable: true,
+    minWidth: 180,
+    flex: 1,
+    cellStyle: editableCellStyle,
+    valueFormatter: numericFormatter,
+  },
+  {
+    field: 'targetPosition',
+    headerName: 'Target Position',
+    editable: true,
+    minWidth: 180,
+    flex: 1,
+    cellStyle: editableCellStyle,
+    valueFormatter: numericFormatter,
+  },
+  {
+    field: 'adjustedEPosition',
+    headerName: 'Adjusted E-Position',
+    editable: true,
+    minWidth: 180,
+    flex: 1,
+    cellStyle: editableCellStyle,
+    valueFormatter: numericFormatter,
+  },
+];
 
 @Component({
   selector: 'app-mmu-risk-grid',
@@ -31,7 +96,7 @@ const EDITABLE_ODD_COLOR = '#fef9ec';
       aria-label="MMU risk data"
       [theme]="theme"
       [rowData]="rows()"
-      [columnDefs]="columnDefs()"
+      [columnDefs]="columnDefs"
       [defaultColDef]="defaultColDef"
       [suppressMovableColumns]="true"
       [suppressCellFocus]="false"
@@ -66,12 +131,11 @@ const EDITABLE_ODD_COLOR = '#fef9ec';
 export class MmuRiskGridComponent {
   private readonly destroyRef = inject(DestroyRef);
 
-  readonly columns = input.required<ColumnMeta[]>();
-  readonly rows = input.required<DataRow[]>();
-
-  readonly cellValueChanged = output<CellValueChangedEvent>();
+  readonly rows = input.required<MergedRow[]>();
+  readonly cellValueChanged = output<CellValueChangedEvent<MergedRow>>();
 
   readonly theme = appGridTheme;
+  readonly columnDefs = COLUMN_DEFS;
   private gridApi: GridApi | null = null;
 
   readonly defaultColDef: ColDef = {
@@ -84,38 +148,6 @@ export class MmuRiskGridComponent {
     type: 'fitGridWidth',
   };
 
-  readonly columnDefs = computed<ColDef[]>(() =>
-    this.columns().map((col) => {
-      const def: ColDef = {
-        field: col.field,
-        headerName: col.headerName,
-        editable: col.editable ?? false,
-        minWidth: col.field === 'qualifiedTenor' ? 280 : 180,
-        flex: 1,
-      };
-
-      if (col.type === 'numeric') {
-        def.cellStyle = (params) => {
-          const isOdd = (params.node.rowIndex ?? 0) % 2 !== 0;
-          const base: Record<string, string> = { textAlign: 'right' };
-          if (col.editable) {
-            base['backgroundColor'] = isOdd ? EDITABLE_ODD_COLOR : EDITABLE_EVEN_COLOR;
-          }
-          return base;
-        };
-        def.valueFormatter = (params) =>
-          params.value != null ? Number(params.value).toLocaleString() : '';
-      } else if (col.editable) {
-        def.cellStyle = (params) => {
-          const isOdd = (params.node.rowIndex ?? 0) % 2 !== 0;
-          return { backgroundColor: isOdd ? EDITABLE_ODD_COLOR : EDITABLE_EVEN_COLOR };
-        };
-      }
-
-      return def;
-    }),
-  );
-
   onGridReady(event: GridReadyEvent): void {
     this.gridApi = event.api;
     this.destroyRef.onDestroy(() => {
@@ -123,11 +155,7 @@ export class MmuRiskGridComponent {
     });
   }
 
-  onCellValueChanged(event: CellValueChangedEvent): void {
+  onCellValueChanged(event: CellValueChangedEvent<MergedRow>): void {
     this.cellValueChanged.emit(event);
-  }
-
-  exportCsv(): void {
-    this.gridApi?.exportDataAsCsv({ fileName: 'mmu-risk-positions.csv' });
   }
 }
