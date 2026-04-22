@@ -106,7 +106,15 @@ export class MmuRiskGridComponent {
 
   readonly columnDefs = computed<ColDef<MergedRow>[]>(() => {
     const m = this.multipliers();
-    const numericCell = (bg: string) => ({ backgroundColor: bg, textAlign: 'right' });
+    const SEP = '1px solid rgba(0, 0, 0, 0.18)';
+    const bgCell = (bg: string, last = false) => ({
+      backgroundColor: bg,
+      ...(last ? {} : { borderRight: SEP }),
+    });
+    const numCell = (bg: string, last = false) => ({
+      ...bgCell(bg, last),
+      textAlign: 'right',
+    });
 
     return [
       {
@@ -115,7 +123,7 @@ export class MmuRiskGridComponent {
         editable: false,
         minWidth: 280,
         flex: 1,
-        cellStyle: { backgroundColor: BLUE_BG },
+        cellStyle: bgCell(BLUE_BG),
       },
       {
         field: 'reflexPosition' as const,
@@ -123,7 +131,7 @@ export class MmuRiskGridComponent {
         editable: false,
         minWidth: 180,
         flex: 1,
-        cellStyle: numericCell(BLUE_BG),
+        cellStyle: numCell(BLUE_BG),
         valueFormatter: numericFormatter,
         valueGetter: (p: ValueGetterParams<MergedRow>) =>
           (p.data?.reflexPosition ?? 0) * m.reflexPositionMultiplier,
@@ -134,9 +142,8 @@ export class MmuRiskGridComponent {
         editable: true,
         minWidth: 180,
         flex: 1,
-        cellStyle: numericCell(WHITE_BG),
+        cellStyle: numCell(WHITE_BG),
         valueFormatter: numericFormatter,
-        // Editor opens with the RAW value (no multiplier) — see header doc above.
         valueGetter: (p: ValueGetterParams<MergedRow>) => p.data?.manualAdjustment ?? 0,
       },
       {
@@ -145,7 +152,7 @@ export class MmuRiskGridComponent {
         editable: false,
         minWidth: 180,
         flex: 1,
-        cellStyle: numericCell(YELLOW_BG),
+        cellStyle: numCell(YELLOW_BG),
         valueFormatter: numericFormatter,
         valueGetter: (p: ValueGetterParams<MergedRow>) =>
           (p.data?.reflexPosition ?? 0) * m.reflexPositionMultiplier +
@@ -157,7 +164,7 @@ export class MmuRiskGridComponent {
         editable: true,
         minWidth: 180,
         flex: 1,
-        cellStyle: numericCell(WHITE_BG),
+        cellStyle: numCell(WHITE_BG),
         valueFormatter: numericFormatter,
         valueGetter: (p: ValueGetterParams<MergedRow>) => p.data?.targetPosition ?? 0,
       },
@@ -167,7 +174,7 @@ export class MmuRiskGridComponent {
         editable: false,
         minWidth: 180,
         flex: 1,
-        cellStyle: numericCell(YELLOW_BG),
+        cellStyle: numCell(YELLOW_BG, true),
         valueFormatter: numericFormatter,
         valueGetter: (p: ValueGetterParams<MergedRow>) =>
           (p.data?.reflexPosition ?? 0) * m.reflexPositionMultiplier +
