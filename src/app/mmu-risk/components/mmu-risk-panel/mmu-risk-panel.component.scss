@@ -16,6 +16,9 @@
 }
 
 .panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--app-border-muted, #b0b0b0);
   background: #f5f5f5;
@@ -25,6 +28,31 @@
     font-size: 0.95rem;
     font-weight: 600;
     color: var(--app-text-color, #1a1a1a);
+  }
+
+  .edit-mmu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--app-text-muted, #555);
+    cursor: pointer;
+
+    &:hover:not([disabled]),
+    &:focus-visible {
+      background: rgba(0, 0, 0, 0.06);
+      color: var(--app-text-color, #1a1a1a);
+    }
+
+    &[disabled] {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
   }
 }
 

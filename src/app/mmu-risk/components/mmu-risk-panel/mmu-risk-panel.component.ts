@@ -1,11 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, output } from '@angular/core';
 import type { CellValueChangedEvent } from 'ag-grid-community';
 import type {
   EditableMergedRowField,
   MergedRow,
   MmuMultipliers,
-  OverrideSource,
-} from '../../contracts/model';
+} from '../../models/model';
 import { MmuRiskStore } from '../../store/mmu-risk.store';
 import { MmuRiskControlsComponent } from '../mmu-risk-controls/mmu-risk-controls.component';
 import { MmuRiskGridComponent } from '../mmu-risk-grid/mmu-risk-grid.component';
@@ -13,9 +12,7 @@ import { MmuRiskStatusBarComponent } from '../mmu-risk-status-bar/mmu-risk-statu
 
 const EDITABLE_FIELDS: ReadonlySet<EditableMergedRowField> = new Set([
   'manualAdjustment',
-  'adjustedReflexPosition',
   'targetPosition',
-  'adjustedEPosition',
 ]);
 
 @Component({
@@ -28,6 +25,8 @@ const EDITABLE_FIELDS: ReadonlySet<EditableMergedRowField> = new Set([
 export class MmuRiskPanelComponent {
   protected readonly store = inject(MmuRiskStore);
 
+  readonly changeMmu = output<void>();
+
   onMultipliersChange(multipliers: MmuMultipliers): void {
     this.store.updateMultipliers(multipliers);
   }
@@ -36,13 +35,9 @@ export class MmuRiskPanelComponent {
     this.store.setSpreadCurves(value);
   }
 
-  onOverrideChange(source: OverrideSource): void {
-    this.store.setOverride(source);
-  }
-
   onCellValueChanged(event: CellValueChangedEvent<MergedRow>): void {
     const tenor = event.data?.tenor;
-    const field = event.colDef.field as keyof MergedRow | undefined;
+    const field = event.colDef.field;
     const value = Number(event.newValue);
     if (
       tenor &&

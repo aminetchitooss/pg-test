@@ -1,5 +1,5 @@
 import { Provider } from '@angular/core';
-import type { MmuRiskApiPort } from '../contracts/ports';
+import type { MmuRiskApiPort } from '../models/ports';
 import { HttpMmuRiskApiService } from './http-mmu-risk-api.service';
 import { MockMmuRiskApiService } from './mock-mmu-risk-api.service';
 import { MMU_RISK_API } from './mmu-risk-api.token';

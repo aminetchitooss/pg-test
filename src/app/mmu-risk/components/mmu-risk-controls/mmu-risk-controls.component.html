@@ -62,27 +62,6 @@
       >
         {{ exportLoading() ? 'Exporting…' : 'Export Positions' }}
       </button>
-      <div class="toggle-stack">
-        <div class="override-toggle">
-          <span
-            class="override-label"
-            [class.active]="override() === 'risk'"
-            aria-hidden="true"
-            >Risk wins</span
-          >
-          <mat-slide-toggle
-            [checked]="override() === 'inputs'"
-            (change)="onOverrideToggle($event.checked)"
-            aria-label="Override source: toggle on for Inputs wins, off for Risk wins"
-          />
-          <span
-            class="override-label"
-            [class.active]="override() === 'inputs'"
-            aria-hidden="true"
-            >Inputs wins</span
-          >
-        </div>
-      </div>
     </div>
   </fieldset>
 
@@ -92,6 +71,7 @@
       type="text"
       [ngModel]="spreadCurvesText()"
       (ngModelChange)="onSpreadCurvesInputChange($event)"
+      [disabled]="!spreadCurvesEditable()"
       placeholder="1M,6M,12M,OIS"
       aria-label="Spread Curves"
     />

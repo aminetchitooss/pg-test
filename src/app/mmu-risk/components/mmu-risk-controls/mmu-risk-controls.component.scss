@@ -1,9 +1,9 @@
 .controls-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   gap: 16px;
-  align-items: flex-start;
-  flex-wrap: wrap;
   margin-bottom: 12px;
+  align-items: stretch;
 }
 
 .control-group {
@@ -11,6 +11,13 @@
   border-radius: 4px;
   padding: 8px 12px;
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  // Content-width border — the grid cell may stretch (1fr) but the fieldset
+  // itself hugs its children so the border doesn't trail into empty space.
+  justify-self: start;
 
   legend {
     font-size: 0.8rem;
@@ -23,7 +30,7 @@
 .multiplier-fields {
   display: flex;
   gap: 12px;
-  align-items: flex-end;
+  align-items: center;
 }
 
 .field {
@@ -66,51 +73,23 @@
   height: 56px;
 }
 
-.toggle-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-left: 8px;
-  border-left: 1px dashed var(--app-border-muted, #b0b0b0);
-  margin-left: 4px;
-}
-
-.override-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.include-risk-toggle {
-  display: flex;
-  align-items: center;
-}
-
-.toggle-caption {
-  font-size: 0.7rem;
-  color: var(--app-text-muted, #555);
-  padding-left: 2px;
-}
-
-.override-label {
-  font-size: 0.7rem;
-  color: var(--app-text-muted, #888);
-  transition: color 120ms ease;
-
-  &.active {
-    color: var(--app-text-color, #1a1a1a);
-    font-weight: 600;
-  }
-}
-
 .spread-curves {
-  margin-left: auto;
+  // Override the group's default `justify-content: center` — we want the
+  // input to stretch the whole visible height of the fieldset.
+  justify-content: stretch;
 
   input {
+    flex: 1 1 auto;
     width: 180px;
     padding: 4px 6px;
     border: 1px solid var(--app-border-muted, #b0b0b0);
     border-radius: 3px;
     font-size: 0.85rem;
+
+    &:disabled {
+      background: #f5f5f5;
+      color: var(--app-text-muted, #777);
+      cursor: not-allowed;
+    }
   }
 }

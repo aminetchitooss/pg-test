@@ -10,13 +10,13 @@ export interface RiskItem {
   value: number;
 }
 
+// Domain PositionTargetItem holds only the source fields.
+// Adjusted fields are computed on display and on export (see mapper).
 export interface PositionTargetItem {
   tenor: string;
   reflexPosition: number;
   manualAdjustment: number;
-  adjustedReflexPosition: number;
   targetPosition: number;
-  adjustedEPosition: number;
 }
 
 export interface InventoryItem {
@@ -52,8 +52,6 @@ export interface ExportPositionsResult {
   error: string;
 }
 
-export type OverrideSource = 'risk' | 'inputs';
-
 export interface MmuMultipliers {
   reflexPositionMultiplier: number;
   manualAdjustmentMultiplier: number;
@@ -62,11 +60,9 @@ export interface MmuMultipliers {
 
 export interface MergedRow {
   tenor: string;
-  reflexPosition: number | null;
-  manualAdjustment: number | null;
-  adjustedReflexPosition: number | null;
-  targetPosition: number | null;
-  adjustedEPosition: number | null;
+  reflexPosition: number;
+  manualAdjustment: number;
+  targetPosition: number;
 }
 
-export type EditableMergedRowField = Exclude<keyof MergedRow, 'tenor' | 'reflexPosition'>;
+export type EditableMergedRowField = 'manualAdjustment' | 'targetPosition';

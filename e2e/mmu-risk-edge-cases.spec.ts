@@ -74,22 +74,24 @@ test.describe('MMU Risk — dialog error + retry', () => {
 });
 
 test.describe('MMU Risk — empty valid response', () => {
-  test('shows empty-state placeholder (not stuck on loading) when Risk returns zero rows', async ({
+  test('shows empty placeholder when Risk returns zero rows (tenors come from Risk)', async ({
     page,
   }) => {
     await gotoMmuRisk(page);
     await setEmptyRiskNext(page);
 
-    await openDialogAndSelect(page, 'EUR_SWAP_DESK');
+    await page.click('button:has-text("Open MMU Risk")');
+    await page.waitForSelector('mat-dialog-container');
+    await page.locator('mat-dialog-container mat-select').click();
+    await page.locator('mat-option', { hasText: 'EUR_SWAP_DESK' }).click();
+    await page.click('mat-dialog-container button[aria-label="Proceed with selected MMU"]');
+    await page.waitForSelector('mat-dialog-container', { state: 'detached' });
+    await page.waitForSelector('app-mmu-risk-panel');
 
-    // Inputs still returns rows, so the grid should still render rows from inputs.
-    await page.waitForSelector('.ag-row');
-
-    // But when both come back empty the empty-state placeholder should show —
-    // fire a second getRisk with inputs also wiped to simulate that. We can't
-    // wipe inputs from the fixture currently; so the invariant we check here
-    // is that `isLoading` never stayed true after risk arrived with []:
+    // Wait for the empty placeholder — grid should NOT render because Risk is empty.
+    await expect(page.locator('.empty-placeholder')).toBeVisible();
     await expect(page.locator('.loading-placeholder')).toHaveCount(0);
+    await expect(page.locator('.ag-row')).toHaveCount(0);
   });
 });
 

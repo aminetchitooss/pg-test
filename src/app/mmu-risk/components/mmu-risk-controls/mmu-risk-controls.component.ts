@@ -1,27 +1,25 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
-import { MatSlideToggleModule } from '@angular/material/slide-toggle';
-import type { MmuMultipliers, OverrideSource } from '../../contracts/model';
+import type { MmuMultipliers } from '../../models/model';
 
 @Component({
   selector: 'app-mmu-risk-controls',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, MatButtonModule, MatSlideToggleModule],
+  imports: [FormsModule, MatButtonModule],
   templateUrl: './mmu-risk-controls.component.html',
   styleUrl: './mmu-risk-controls.component.scss',
 })
 export class MmuRiskControlsComponent {
   readonly multipliers = input.required<MmuMultipliers>();
   readonly spreadCurves = input.required<string[]>();
-  readonly override = input.required<OverrideSource>();
+  readonly spreadCurvesEditable = input(true);
   readonly riskLoading = input(false);
   readonly inputsLoading = input(false);
   readonly exportLoading = input(false);
 
   readonly multipliersChange = output<MmuMultipliers>();
   readonly spreadCurvesChange = output<string[]>();
-  readonly overrideChange = output<OverrideSource>();
   readonly refreshRisk = output<void>();
   readonly refreshInputs = output<void>();
   readonly exportPositions = output<void>();
@@ -41,9 +39,5 @@ export class MmuRiskControlsComponent {
       .map((s) => s.trim())
       .filter(Boolean);
     this.spreadCurvesChange.emit(curves);
-  }
-
-  onOverrideToggle(checked: boolean): void {
-    this.overrideChange.emit(checked ? 'inputs' : 'risk');
   }
 }

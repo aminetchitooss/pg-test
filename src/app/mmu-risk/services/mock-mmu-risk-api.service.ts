@@ -8,22 +8,15 @@ import type {
   MmuUserMappingsResult,
   PositionTargetItem,
   ReportV4Request,
-} from '../contracts/model';
-import type { MmuRiskApiPort } from '../contracts/ports';
+} from '../models/model';
+import type { MmuRiskApiPort } from '../models/ports';
 import {
-  exportResponseFromDto,
-  inputsResponseFromDto,
-  riskResponseFromDto,
-  userMappingsFromDto,
-} from '../contracts/mapper';
-import { generateRequestId } from '../contracts/request-id';
-import {
-  mockEmptyRiskDto,
-  mockExportDto,
-  mockInputsDto,
-  mockRiskDto,
-  mockUserMappingsDto,
-} from './fixtures/mock-dto.fixture';
+  mockEmptyRisk,
+  mockExport,
+  mockInputs,
+  mockRisk,
+  mockUserMappings,
+} from './fixtures/mock.fixture';
 
 const MOCK_LATENCY_MS = 300;
 
@@ -33,10 +26,6 @@ export type MockEndpoint =
   | 'getInputs'
   | 'exportPositions';
 
-/**
- * Test hook attached to window in dev only. Lets Playwright simulate
- * per-endpoint errors and empty responses without re-wiring DI.
- */
 export interface MockControl {
   failNext: Partial<Record<MockEndpoint, string | null>>;
   emptyRiskNext: boolean;
@@ -76,9 +65,7 @@ export class MockMmuRiskApiService implements MmuRiskApiPort {
   getUserMappings(_params: { userId: string }): Observable<MmuUserMappingsResult> {
     const failure = consumeFailure('getUserMappings');
     if (failure) return delayedError(failure);
-    return timer(MOCK_LATENCY_MS).pipe(
-      map(() => userMappingsFromDto(mockUserMappingsDto(generateRequestId()))),
-    );
+    return timer(MOCK_LATENCY_MS).pipe(map(() => mockUserMappings()));
   }
 
   getRisk(params: {
@@ -92,22 +79,14 @@ export class MockMmuRiskApiService implements MmuRiskApiPort {
     this.riskCallCount += 1;
     const jitter = this.riskCallCount === 1 ? 0 : 25;
     return timer(MOCK_LATENCY_MS).pipe(
-      map(() =>
-        riskResponseFromDto(
-          empty
-            ? mockEmptyRiskDto(generateRequestId())
-            : mockRiskDto(generateRequestId(), params.spreadCurves, jitter),
-        ),
-      ),
+      map(() => (empty ? mockEmptyRisk() : mockRisk(params.spreadCurves, jitter))),
     );
   }
 
   getInputs(params: { mmuName: string }): Observable<MmuInputsResult> {
     const failure = consumeFailure('getInputs');
     if (failure) return delayedError(failure);
-    return timer(MOCK_LATENCY_MS).pipe(
-      map(() => inputsResponseFromDto(mockInputsDto(generateRequestId(), params.mmuName))),
-    );
+    return timer(MOCK_LATENCY_MS).pipe(map(() => mockInputs(params.mmuName)));
   }
 
   exportPositions(_params: {
@@ -118,7 +97,7 @@ export class MockMmuRiskApiService implements MmuRiskApiPort {
   }): Observable<ExportPositionsResult> {
     const failure = consumeFailure('exportPositions');
     if (failure) return delayedError(failure);
-    return timer(MOCK_LATENCY_MS).pipe(map(() => exportResponseFromDto(mockExportDto())));
+    return timer(MOCK_LATENCY_MS).pipe(map(() => mockExport()));
   }
 }
 

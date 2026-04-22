@@ -11,7 +11,10 @@ import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { useShortcut } from '../../../shared/shortcut/use-shortcut';
 import { MmuRiskStore } from '../../store/mmu-risk.store';
 import { MmuRiskPanelComponent } from '../mmu-risk-panel/mmu-risk-panel.component';
-import { MmuSelectorDialogComponent } from '../mmu-selector-dialog/mmu-selector-dialog.component';
+import {
+  MmuSelectorDialogComponent,
+  MmuSelectorDialogData,
+} from '../mmu-selector-dialog/mmu-selector-dialog.component';
 
 @Component({
   selector: 'app-mmu-risk-page',
@@ -29,7 +32,6 @@ export class MmuRiskPageComponent {
 
   private openDialogRef: MatDialogRef<MmuSelectorDialogComponent, string | null> | null = null;
 
-  // Single source of truth — no mirrored local signal.
   protected readonly isOpen = this.store.hasMmuSelected;
 
   constructor() {
@@ -52,23 +54,43 @@ export class MmuRiskPageComponent {
   }
 
   open(): void {
-    if (this.openDialogRef) return; // guard against double-open
+    if (this.openDialogRef) return;
     console.log('[mmu-risk] Open MMU Risk clicked');
-    const ref = this.dialog.open(MmuSelectorDialogComponent, {
-      viewContainerRef: this.viewContainerRef,
+    this.openDialog(null, (selected) => {
+      if (selected) this.store.enterMmu(selected);
     });
-    this.openDialogRef = ref;
-    ref
-      .afterClosed()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((selected) => {
-        this.openDialogRef = null;
-        if (selected) this.store.enterMmu(selected);
-      });
   }
 
   close(): void {
     console.log('[mmu-risk] Close MMU Risk clicked');
     this.store.reset();
+  }
+
+  changeMmu(): void {
+    if (this.openDialogRef) return;
+    console.log('[mmu-risk] Change MMU clicked');
+    this.openDialog(this.store.mmuName(), (selected) => {
+      if (selected && selected !== this.store.mmuName()) {
+        this.store.changeMmu(selected);
+      }
+    });
+  }
+
+  private openDialog(preselected: string | null, onClose: (v: string | null) => void): void {
+    const ref = this.dialog.open<MmuSelectorDialogComponent, MmuSelectorDialogData, string | null>(
+      MmuSelectorDialogComponent,
+      {
+        viewContainerRef: this.viewContainerRef,
+        data: { preselected },
+      },
+    );
+    this.openDialogRef = ref;
+    ref
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((result) => {
+        this.openDialogRef = null;
+        onClose(result ?? null);
+      });
   }
 }

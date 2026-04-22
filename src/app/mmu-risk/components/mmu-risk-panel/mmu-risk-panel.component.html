@@ -1,18 +1,38 @@
 <section class="panel" aria-labelledby="mmu-risk-panel-title">
   <header class="panel-header">
     <h2 id="mmu-risk-panel-title">Feed Position Targets [MMU: {{ store.mmuName() || '—' }}]</h2>
+    <button
+      type="button"
+      class="edit-mmu-btn"
+      aria-label="Change MMU"
+      title="Change MMU"
+      [disabled]="store.isLoading()"
+      (click)="changeMmu.emit()"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width="16"
+        height="16"
+        aria-hidden="true"
+        focusable="false"
+        fill="currentColor"
+      >
+        <path
+          d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+        />
+      </svg>
+    </button>
   </header>
 
   <app-mmu-risk-controls
     [multipliers]="store.multipliers()"
     [spreadCurves]="store.spreadCurves()"
-    [override]="store.override()"
+    [spreadCurvesEditable]="store.spreadCurvesEditable()"
     [riskLoading]="store.riskLoading()"
     [inputsLoading]="store.inputsLoading()"
     [exportLoading]="store.exportLoading()"
     (multipliersChange)="onMultipliersChange($event)"
     (spreadCurvesChange)="onSpreadCurvesChange($event)"
-    (overrideChange)="onOverrideChange($event)"
     (refreshRisk)="store.refreshRisk()"
     (refreshInputs)="store.refreshInputs()"
     (exportPositions)="store.exportPositions()"
@@ -53,11 +73,12 @@
   } @else if (store.hasRows()) {
     <app-mmu-risk-grid
       [rows]="store.mergedRows()"
+      [multipliers]="store.multipliers()"
       (cellValueChanged)="onCellValueChanged($event)"
     />
   } @else {
     <div class="empty-placeholder" role="status">
-      No positions returned for this MMU. Click Refresh Risk or Refresh Inputs.
+      No positions returned for this MMU. Click Refresh Risk to try again.
     </div>
   }
 

@@ -2,22 +2,6 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { inject, Injectable, InjectionToken } from '@angular/core';
 import { catchError, map, Observable, throwError } from 'rxjs';
 import type {
-  ExportPositionsResponseDto,
-  MmuInputsResponseDto,
-  MmuRiskResponseDto,
-  MmuUserMappingsResponseDto,
-} from '../contracts/dto';
-import {
-  exportRequestToDto,
-  exportResponseFromDto,
-  inputsRequestToDto,
-  inputsResponseFromDto,
-  riskRequestToDto,
-  riskResponseFromDto,
-  userMappingsFromDto,
-  userMappingsRequestToDto,
-} from '../contracts/mapper';
-import type {
   ExportPositionsResult,
   InventoryItem,
   MmuInputsResult,
@@ -25,13 +9,19 @@ import type {
   MmuUserMappingsResult,
   PositionTargetItem,
   ReportV4Request,
-} from '../contracts/model';
-import type { MmuRiskApiPort } from '../contracts/ports';
-import { generateRequestId } from '../contracts/request-id';
+} from '../models/model';
+import type { MmuRiskApiPort } from '../models/ports';
+import { generateRequestId } from '../models/request-id';
+import {
+  RawMmuInputsResponse,
+  RawMmuRiskResponse,
+  parseInputsResponse,
+  parseRiskResponse,
+} from '../models/parsers';
 
 /**
- * Base URL prepended to every endpoint. Default '' lets the browser
- * hit same-origin paths. Override in app.config via
+ * Base URL prepended to every endpoint. Default '' lets the browser hit
+ * same-origin paths. Override in app.config via
  * `{ provide: MMU_RISK_API_BASE_URL, useValue: 'https://api.example' }`.
  */
 export const MMU_RISK_API_BASE_URL = new InjectionToken<string>('MMU_RISK_API_BASE_URL', {
@@ -51,10 +41,12 @@ export class HttpMmuRiskApiService implements MmuRiskApiPort {
   private readonly baseUrl = inject(MMU_RISK_API_BASE_URL);
 
   getUserMappings(params: { userId: string }): Observable<MmuUserMappingsResult> {
-    const body = userMappingsRequestToDto({ requestId: generateRequestId(), userId: params.userId });
     return this.http
-      .post<MmuUserMappingsResponseDto>(this.url(ENDPOINTS.userMappings), body)
-      .pipe(map(userMappingsFromDto), catchError(normalizeHttpError('getUserMappings')));
+      .post<MmuUserMappingsResult>(this.url(ENDPOINTS.userMappings), {
+        requestId: generateRequestId(),
+        userId: params.userId,
+      })
+      .pipe(catchError(normalizeHttpError('getUserMappings')));
   }
 
   getRisk(params: {
@@ -62,17 +54,23 @@ export class HttpMmuRiskApiService implements MmuRiskApiPort {
     spreadCurves: string[];
     reportV4Request: ReportV4Request;
   }): Observable<MmuRiskResult> {
-    const body = riskRequestToDto({ requestId: generateRequestId(), ...params });
     return this.http
-      .post<MmuRiskResponseDto>(this.url(ENDPOINTS.risk), body)
-      .pipe(map(riskResponseFromDto), catchError(normalizeHttpError('getRisk')));
+      .post<RawMmuRiskResponse>(this.url(ENDPOINTS.risk), {
+        requestId: generateRequestId(),
+        mmuName: params.mmuName,
+        spreadCurves: params.spreadCurves,
+        reportV4Request: params.reportV4Request,
+      })
+      .pipe(map(parseRiskResponse), catchError(normalizeHttpError('getRisk')));
   }
 
   getInputs(params: { mmuName: string }): Observable<MmuInputsResult> {
-    const body = inputsRequestToDto({ requestId: generateRequestId(), ...params });
     return this.http
-      .post<MmuInputsResponseDto>(this.url(ENDPOINTS.inputs), body)
-      .pipe(map(inputsResponseFromDto), catchError(normalizeHttpError('getInputs')));
+      .post<RawMmuInputsResponse>(this.url(ENDPOINTS.inputs), {
+        requestId: generateRequestId(),
+        mmuName: params.mmuName,
+      })
+      .pipe(map(parseInputsResponse), catchError(normalizeHttpError('getInputs')));
   }
 
   exportPositions(params: {
@@ -81,15 +79,35 @@ export class HttpMmuRiskApiService implements MmuRiskApiPort {
     inventory: InventoryItem[];
     positionTargets: PositionTargetItem[];
   }): Observable<ExportPositionsResult> {
-    const body = exportRequestToDto({ requestId: generateRequestId(), ...params });
     return this.http
-      .post<ExportPositionsResponseDto>(this.url(ENDPOINTS.exportPositions), body)
-      .pipe(map(exportResponseFromDto), catchError(normalizeHttpError('exportPositions')));
+      .post<ExportPositionsResult>(this.url(ENDPOINTS.exportPositions), {
+        requestId: generateRequestId(),
+        mmuName: params.mmuName,
+        userId: params.userId,
+        inventory: params.inventory,
+        positionTargets: params.positionTargets.map(withAdjustedSums),
+      })
+      .pipe(catchError(normalizeHttpError('exportPositions')));
   }
 
   private url(path: string): string {
     return `${this.baseUrl}${path}`;
   }
+}
+
+/**
+ * The wire contract requires adjusted* fields on each PositionTargetItem.
+ * Multipliers are UI-only, so adjusted values are raw sums on the wire.
+ */
+function withAdjustedSums(item: PositionTargetItem): PositionTargetItem & {
+  adjustedReflexPosition: number;
+  adjustedEPosition: number;
+} {
+  return {
+    ...item,
+    adjustedReflexPosition: item.reflexPosition + item.manualAdjustment,
+    adjustedEPosition: item.reflexPosition + item.targetPosition,
+  };
 }
 
 function normalizeHttpError(operation: string) {

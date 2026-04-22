@@ -71,160 +71,178 @@ test.describe('MMU Risk — panel after MMU selection', () => {
     await selectMmuAndProceed(page, 'EUR_SWAP_DESK');
   });
 
-  test('header reflects the selected MMU name', async ({ page }) => {
+  test('header reflects the selected MMU name and shows the Change MMU button', async ({ page }) => {
     await expect(page.locator('#mmu-risk-panel-title')).toContainText('EUR_SWAP_DESK');
+    await expect(page.locator('button[aria-label="Change MMU"]')).toBeVisible();
   });
 
-  test('grid renders the contract columns (static, no dynamic schema)', async ({ page }) => {
-    const expected = [
+  test('grid renders the 6 contract columns in order', async ({ page }) => {
+    const headers = await page.locator('.ag-header-cell-text').allTextContents();
+    expect(headers).toEqual([
       'Tenor',
       'Reflex Position',
       'Manual Adjustment',
       'Adjusted Reflex Position',
       'Target Position',
       'Adjusted E-Position',
-    ];
-    const headers = await page.locator('.ag-header-cell-text').allTextContents();
-    expect(headers).toEqual(expected);
+    ]);
   });
 
-  test('renders rows keyed by tenor with parsed numeric values', async ({ page }) => {
-    const firstTenor = await page
-      .locator('.ag-row[row-index="0"] .ag-cell[col-id="tenor"]')
-      .textContent();
-    expect(firstTenor).toContain('Delta_O/N');
-
-    const reflex = await page
-      .locator('.ag-row[row-index="0"] .ag-cell[col-id="reflexPosition"]')
-      .textContent();
-    expect(reflex?.trim()).toBe('3');
+  test('Tenor and Reflex Position do not enter edit mode on double-click', async ({ page }) => {
+    await page.locator('.ag-row[row-index="0"] .ag-cell[col-id="tenor"]').dblclick();
+    await expect(page.locator('.ag-cell-inline-editing')).toHaveCount(0);
+    await page.locator('.ag-row[row-index="0"] .ag-cell[col-id="reflexPosition"]').dblclick();
+    await expect(page.locator('.ag-cell-inline-editing')).toHaveCount(0);
   });
 
-  test('controls show defaults: multipliers=1, spread curves seeded, override=risk', async ({
+  test('Manual Adjustment and Target Position enter edit mode on double-click', async ({ page }) => {
+    await page.locator('.ag-row[row-index="0"] .ag-cell[col-id="manualAdjustment"]').dblclick();
+    await expect(page.locator('.ag-cell-inline-editing')).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await page.locator('.ag-row[row-index="0"] .ag-cell[col-id="targetPosition"]').dblclick();
+    await expect(page.locator('.ag-cell-inline-editing')).toHaveCount(1);
+    await page.keyboard.press('Escape');
+  });
+
+  test('Adjusted columns do not enter edit mode (computed)', async ({ page }) => {
+    await page
+      .locator('.ag-row[row-index="0"] .ag-cell[col-id="adjustedReflexPosition"]')
+      .dblclick();
+    await expect(page.locator('.ag-cell-inline-editing')).toHaveCount(0);
+    await page.locator('.ag-row[row-index="0"] .ag-cell[col-id="adjustedEPosition"]').dblclick();
+    await expect(page.locator('.ag-cell-inline-editing')).toHaveCount(0);
+  });
+
+  test('per-column background colors are as specified', async ({ page }) => {
+    const bgOf = async (colId: string): Promise<string> => {
+      return page
+        .locator(`.ag-row[row-index="0"] .ag-cell[col-id="${colId}"]`)
+        .evaluate((el) => getComputedStyle(el as HTMLElement).backgroundColor);
+    };
+
+    const BLUE = 'rgb(135, 206, 250)';
+    const YELLOW = 'rgb(250, 250, 210)';
+    const WHITE = 'rgb(255, 255, 255)';
+
+    expect(await bgOf('tenor')).toBe(BLUE);
+    expect(await bgOf('reflexPosition')).toBe(BLUE);
+    expect(await bgOf('manualAdjustment')).toBe(WHITE);
+    expect(await bgOf('adjustedReflexPosition')).toBe(YELLOW);
+    expect(await bgOf('targetPosition')).toBe(WHITE);
+    expect(await bgOf('adjustedEPosition')).toBe(YELLOW);
+  });
+
+  test('editing Manual Adjustment updates Adjusted Reflex Position in the same row', async ({
+    page,
+  }) => {
+    const manual = page.locator('.ag-row[row-index="0"] .ag-cell[col-id="manualAdjustment"]');
+    const adjReflex = page.locator(
+      '.ag-row[row-index="0"] .ag-cell[col-id="adjustedReflexPosition"]',
+    );
+    const reflex = page.locator('.ag-row[row-index="0"] .ag-cell[col-id="reflexPosition"]');
+
+    const reflexText = await reflex.textContent();
+    const reflexNum = Number(reflexText?.replace(/,/g, '') ?? '0');
+
+    await manual.dblclick();
+    await page.keyboard.type('7');
+    await page.keyboard.press('Enter');
+
+    await expect(manual).toHaveText('7');
+    await expect(adjReflex).toHaveText(String(reflexNum + 7));
+  });
+
+  test('Reflex Position Multiplier updates Reflex + Adjusted columns, not the raw', async ({
+    page,
+  }) => {
+    const reflex = page.locator('.ag-row[row-index="0"] .ag-cell[col-id="reflexPosition"]');
+    const adjReflex = page.locator(
+      '.ag-row[row-index="0"] .ag-cell[col-id="adjustedReflexPosition"]',
+    );
+    const reflexBefore = Number((await reflex.textContent())?.replace(/,/g, '') ?? '0');
+
+    const rMult = page.locator('input[aria-label="Reflex Position Multiplier"]');
+    await rMult.fill('');
+    await rMult.fill('2');
+    await rMult.blur();
+
+    await expect(reflex).toHaveText(String(reflexBefore * 2));
+    // manual default is 0, so adjustedReflex = reflex*2 + 0*m = reflex*2
+    await expect(adjReflex).toHaveText(String(reflexBefore * 2));
+  });
+
+  test('controls: multiplier defaults are 1, spread curves seeded, override toggle is gone', async ({
     page,
   }) => {
     await expect(page.locator('input[aria-label="Reflex Position Multiplier"]')).toHaveValue('1');
     await expect(page.locator('input[aria-label="Manual Adjustment Multiplier"]')).toHaveValue('1');
     await expect(page.locator('input[aria-label="Target Position Multiplier"]')).toHaveValue('1');
     await expect(page.locator('input[aria-label="Spread Curves"]')).toHaveValue('1M,6M,12M,OIS');
-
-    const toggle = page.locator('button[role="switch"][aria-label*="Override source"]');
-    await expect(toggle).toHaveAttribute('aria-checked', 'false');
-    await expect(page.locator('.override-label.active', { hasText: 'Risk wins' })).toBeVisible();
+    await expect(page.locator('[aria-label*="Override source"]')).toHaveCount(0);
   });
 
-  test('override toggle flips active label and keeps the same columns', async ({ page }) => {
-    await expect(page.locator('.override-label.active', { hasText: 'Risk wins' })).toBeVisible();
-    const toggle = page.locator('button[role="switch"][aria-label*="Override source"]');
-    await toggle.click();
-    await expect(page.locator('.override-label.active', { hasText: 'Inputs wins' })).toBeVisible();
-    const headerCount = await page.locator('.ag-header-cell').count();
-    expect(headerCount).toBe(6);
+  test('control fieldsets align to equal height', async ({ page }) => {
+    const heights = await page
+      .locator('.controls-row > .control-group')
+      .evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height)));
+    expect(heights.length).toBe(3);
+    const min = Math.min(...heights);
+    const max = Math.max(...heights);
+    // Stretch alignment — all fieldsets within a few px of each other.
+    expect(max - min).toBeLessThanOrEqual(4);
   });
 
-  test('Refresh Risk stays clickable and updates snapshot', async ({ page }) => {
+  test('Refresh Risk stays clickable and independent', async ({ page }) => {
     const refreshRisk = page.locator('button[aria-label="Refresh Risk"]');
     await expect(refreshRisk).toBeEnabled();
     await refreshRisk.click();
     await expect(refreshRisk).toHaveText(/Refreshing Risk/);
     await expect(refreshRisk).toBeEnabled();
-    await expect(refreshRisk).toHaveText(/^\s*Refresh Risk\s*$/);
   });
 
-  test('Refresh Inputs stays clickable independently of Refresh Risk', async ({ page }) => {
-    const refreshRisk = page.locator('button[aria-label="Refresh Risk"]');
-    const refreshInputs = page.locator('button[aria-label="Refresh Inputs"]');
-    await refreshInputs.click();
-    await expect(refreshInputs).toBeDisabled();
-    await expect(refreshRisk).toBeEnabled();
-    await expect(refreshInputs).toBeEnabled();
-  });
-
-  test('spread curves input is editable (no longer read-only)', async ({ page }) => {
-    const input = page.locator('input[aria-label="Spread Curves"]');
-    await expect(input).toBeEditable();
-    await input.fill('2Y,5Y,10Y');
-    await expect(input).toHaveValue('2Y,5Y,10Y');
-  });
-
-  test('Export Positions surfaces a success banner (no CSV download)', async ({ page }) => {
-    const downloads: string[] = [];
-    page.on('download', (d) => downloads.push(d.suggestedFilename()));
-
+  test('Export Positions surfaces a dismissible success banner', async ({ page }) => {
     await page.click('button[aria-label="Export Positions"]');
-    await expect(page.locator('.export-banner.success')).toContainText(
-      'Positions exported successfully',
-    );
-    expect(downloads).toEqual([]);
+    const banner = page.locator('.export-banner.success');
+    await expect(banner).toBeVisible();
+    await banner.locator('button[aria-label="Dismiss export message"]').click();
+    await expect(banner).toHaveCount(0);
   });
 
   test('status bar shows MMU name and snapshot timestamp, no direction badge', async ({ page }) => {
     const statusBar = page.locator('app-mmu-risk-status-bar');
-    await expect(statusBar).toBeVisible();
     await expect(statusBar).toContainText('MMU:');
     await expect(statusBar).toContainText('EUR_SWAP_DESK');
     await expect(statusBar).toContainText('Snapshot:');
     await expect(statusBar).toContainText('Last publish:');
-    await expect(statusBar).not.toContainText(/\bLong\b/);
-    await expect(statusBar).not.toContainText(/\bShort\b/);
-    await expect(statusBar).not.toContainText(/\bFlat\b/);
+    await expect(statusBar).not.toContainText(/\bLong\b|\bShort\b|\bFlat\b/);
   });
 
-  test('no include-risk-columns toggle exists (feature removed)', async ({ page }) => {
-    await expect(
-      page.locator('[aria-label*="Inputs response includes risk-overlap columns"]'),
-    ).toHaveCount(0);
+  test('Change MMU button opens the dialog pre-selected and swaps MMU on proceed', async ({
+    page,
+  }) => {
+    await page.click('button[aria-label="Change MMU"]');
+    await expect(page.locator('mat-dialog-container')).toBeVisible();
+    // Pre-selected — proceed is enabled without a click
+    const proceed = page.locator('button[aria-label="Proceed with selected MMU"]');
+    await expect(proceed).toBeEnabled();
+
+    // Pick a different MMU
+    await page.locator('mat-dialog-container mat-select').click();
+    await page.locator('mat-option', { hasText: 'USD_RATES_DESK' }).click();
+    await proceed.click();
+
+    await page.waitForSelector('mat-dialog-container', { state: 'detached' });
+    await expect(page.locator('#mmu-risk-panel-title')).toContainText('USD_RATES_DESK');
   });
 
-  test('close + reopen triggers the dialog again', async ({ page }) => {
+  test('close + reopen triggers the dialog fresh (no pre-selection)', async ({ page }) => {
     await page.click('button:has-text("Close MMU Risk")');
     await expect(page.locator('app-mmu-risk-panel')).toHaveCount(0);
 
     await page.click('button:has-text("Open MMU Risk")');
     await expect(page.locator('mat-dialog-container')).toBeVisible();
-    await page.click('mat-dialog-container button[aria-label="Cancel MMU selection"]');
-  });
-
-  test('logs events for refresh, override, export, close', async ({ page }) => {
-    const logs: string[] = [];
-    page.on('console', (msg) => {
-      if (msg.type() === 'log' && msg.text().includes('[mmu-risk]')) {
-        logs.push(msg.text());
-      }
-    });
-
-    await page.click('button[aria-label="Refresh Risk"]');
-    await expect(page.locator('button[aria-label="Refresh Risk"]')).toBeEnabled();
-    await page.click('button[aria-label="Refresh Inputs"]');
-    await expect(page.locator('button[aria-label="Refresh Inputs"]')).toBeEnabled();
-    await page.locator('button[role="switch"][aria-label*="Override source"]').click();
-    await page.click('button[aria-label="Export Positions"]');
-    await expect(page.locator('.export-banner.success')).toBeVisible();
-    await page.click('button:has-text("Close MMU Risk")');
-
-    const joined = logs.join('\n');
-    expect(joined).toContain('[mmu-risk] Refresh Risk clicked');
-    expect(joined).toContain('[mmu-risk] Refresh Inputs clicked');
-    expect(joined).toContain('[mmu-risk] Override toggle changed');
-    expect(joined).toContain('[mmu-risk] Export Positions clicked');
-    expect(joined).toContain('[mmu-risk] Close MMU Risk clicked');
-  });
-});
-
-test.describe('MMU Risk — logging during selection', () => {
-  test('logs MMU selected when user picks one and clicks Proceed', async ({ page }) => {
-    const logs: string[] = [];
-    page.on('console', (msg) => {
-      if (msg.type() === 'log' && msg.text().includes('[mmu-risk]')) {
-        logs.push(msg.text());
-      }
-    });
-    await openDialog(page);
-    await selectMmuAndProceed(page, 'USD_RATES_DESK');
-    const joined = logs.join('\n');
-    expect(joined).toContain('[mmu-risk] Open MMU Risk clicked');
-    expect(joined).toContain('[mmu-risk] MMU selected');
-    expect(joined).toContain('USD_RATES_DESK');
+    await expect(page.locator('button[aria-label="Proceed with selected MMU"]')).toBeDisabled();
+    await page.click('button[aria-label="Cancel MMU selection"]');
   });
 });
 

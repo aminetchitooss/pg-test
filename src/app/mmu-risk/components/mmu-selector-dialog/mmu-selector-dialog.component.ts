@@ -1,7 +1,15 @@
-import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import {
+  MAT_DIALOG_DATA,
   MatDialogActions,
   MatDialogContent,
   MatDialogRef,
@@ -10,6 +18,10 @@ import {
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MmuRiskStore } from '../../store/mmu-risk.store';
+
+export interface MmuSelectorDialogData {
+  preselected: string | null;
+}
 
 @Component({
   selector: 'app-mmu-selector-dialog',
@@ -72,8 +84,9 @@ import { MmuRiskStore } from '../../store/mmu-risk.store';
 export class MmuSelectorDialogComponent implements OnInit {
   protected readonly store = inject(MmuRiskStore);
   private readonly dialogRef = inject(MatDialogRef<MmuSelectorDialogComponent, string | null>);
+  private readonly data = inject<MmuSelectorDialogData | null>(MAT_DIALOG_DATA, { optional: true });
 
-  protected readonly selected = signal<string | null>(null);
+  protected readonly selected = signal<string | null>(this.data?.preselected ?? null);
   protected readonly names = computed(() => this.store.availableMmuNames());
   protected readonly canProceed = computed(() => !!this.selected());
 

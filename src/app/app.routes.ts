@@ -1,7 +1,7 @@
 import type { Routes } from '@angular/router';
 
 export const routes: Routes = [
-  { path: '', redirectTo: 'risk-position', pathMatch: 'full' },
+  { path: '', redirectTo:'mmu-risk', pathMatch: 'full' },
   {
     path: 'grid',
     loadChildren: () => import('./grid/grid.routes').then((m) => m.gridRoutes),

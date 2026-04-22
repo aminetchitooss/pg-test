@@ -2,18 +2,17 @@ import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { catchError, EMPTY, pipe, switchMap, tap } from 'rxjs';
-import { createDefaultReportV4Request } from '../contracts/default-report-v4';
+import { createDefaultReportV4Request } from '../models/default-report-v4';
 import type {
+  EditableMergedRowField,
   ExportPositionsResult,
   InventoryItem,
   MergedRow,
   MmuMultipliers,
-  OverrideSource,
   PositionTargetItem,
   ReportV4Request,
   RiskItem,
-} from '../contracts/model';
-import type { MmuRiskApiPort } from '../contracts/ports';
+} from '../models/model';
 import { MMU_RISK_API } from '../services/mmu-risk-api.token';
 
 type MmuRiskState = {
@@ -26,6 +25,7 @@ type MmuRiskState = {
 
   // request inputs
   spreadCurves: string[];
+  spreadCurvesEditable: boolean;
   reportV4Request: ReportV4Request;
 
   // risk response
@@ -42,7 +42,6 @@ type MmuRiskState = {
   inputsLoading: boolean;
 
   // UI prefs (persist across reset)
-  override: OverrideSource;
   multipliers: MmuMultipliers;
 
   // export
@@ -63,6 +62,7 @@ const initialState: MmuRiskState = {
   userMappingsError: null,
 
   spreadCurves: [...INITIAL_SPREAD_CURVES],
+  spreadCurvesEditable: true,
   reportV4Request: createDefaultReportV4Request(),
 
   risk: [],
@@ -76,7 +76,6 @@ const initialState: MmuRiskState = {
   comment: '',
   inputsLoading: false,
 
-  override: 'risk',
   multipliers: {
     reflexPositionMultiplier: 1,
     manualAdjustmentMultiplier: 1,
@@ -95,12 +94,8 @@ export const MmuRiskStore = signalStore(
   withComputed((store) => ({
     hasMmuSelected: computed(() => store.mmuName() !== null),
     isLoading: computed(() => store.riskLoading() || store.inputsLoading()),
-    hasRows: computed(
-      () => store.risk().length > 0 || store.positionTargets().length > 0,
-    ),
-    mergedRows: computed(() =>
-      mergeRows(store.risk(), store.positionTargets(), store.override()),
-    ),
+    hasRows: computed(() => store.risk().length > 0),
+    mergedRows: computed(() => mergeRows(store.risk(), store.positionTargets())),
   })),
 
   withMethods((store, api = inject(MMU_RISK_API)) => {
@@ -145,7 +140,7 @@ export const MmuRiskStore = signalStore(
             })
             .pipe(
               tap((result) => {
-                if (store.mmuName() !== requestedMmuName) return; // stale response, drop
+                if (store.mmuName() !== requestedMmuName) return;
                 patchState(store, {
                   risk: result.risk,
                   inventory: result.inventory,
@@ -199,12 +194,13 @@ export const MmuRiskStore = signalStore(
           if (!requestedMmuName) return EMPTY;
           console.log('[mmu-risk] Export Positions clicked', { mmuName: requestedMmuName });
           patchState(store, { exportLoading: true, exportStatus: null });
+          const payload = buildExportPayload(store.risk(), store.positionTargets());
           return api
             .exportPositions({
               mmuName: requestedMmuName,
               userId: store.userId(),
               inventory: store.inventory(),
-              positionTargets: store.positionTargets(),
+              positionTargets: payload,
             })
             .pipe(
               tap((result) => {
@@ -240,26 +236,41 @@ export const MmuRiskStore = signalStore(
       setSpreadCurves(spreadCurves: string[]): void {
         patchState(store, { spreadCurves });
       },
+      setSpreadCurvesEditable(editable: boolean): void {
+        patchState(store, { spreadCurvesEditable: editable });
+      },
       setReportV4Request(reportV4Request: ReportV4Request): void {
         patchState(store, { reportV4Request });
-      },
-      setOverride(override: OverrideSource): void {
-        console.log('[mmu-risk] Override toggle changed', { override });
-        patchState(store, { override });
       },
       updateMultipliers(multipliers: MmuMultipliers): void {
         patchState(store, { multipliers });
       },
       updatePositionTargetField(
         tenor: string,
-        field: keyof Omit<PositionTargetItem, 'tenor'>,
+        field: EditableMergedRowField,
         value: number,
       ): void {
-        patchState(store, {
-          positionTargets: store
-            .positionTargets()
-            .map((row) => (row.tenor === tenor ? { ...row, [field]: value } : row)),
-        });
+        const existing = store.positionTargets();
+        const hasTenor = existing.some((row) => row.tenor === tenor);
+        if (hasTenor) {
+          patchState(store, {
+            positionTargets: existing.map((row) =>
+              row.tenor === tenor ? { ...row, [field]: value } : row,
+            ),
+          });
+          return;
+        }
+        // User edited a zero-defaulted row that doesn't exist in positionTargets yet —
+        // materialize it now so the edit survives.
+        const reflex = store.risk().find((r) => r.tenor === tenor)?.value ?? 0;
+        const fresh: PositionTargetItem = {
+          tenor,
+          reflexPosition: reflex,
+          manualAdjustment: 0,
+          targetPosition: 0,
+          [field]: value,
+        };
+        patchState(store, { positionTargets: [...existing, fresh] });
       },
       dismissExportStatus(): void {
         patchState(store, { exportStatus: null });
@@ -270,9 +281,27 @@ export const MmuRiskStore = signalStore(
         refreshRisk();
         refreshInputs();
       },
+      changeMmu(mmuName: string): void {
+        // Called from the "Edit MMU" flow. Same as enterMmu but preserves the
+        // semantics that "refresh replaces everything" — we wipe derived state
+        // for the old MMU first.
+        console.log('[mmu-risk] MMU changed', { mmuName });
+        patchState(store, {
+          mmuName,
+          risk: [],
+          inventory: [],
+          snapshotTime: null,
+          positionTargets: [],
+          lastPublishTime: null,
+          lastPublishedBy: '',
+          comment: '',
+          exportStatus: null,
+          error: null,
+        });
+        refreshRisk();
+        refreshInputs();
+      },
       reset(): void {
-        // Keep user-level prefs (userId, spreadCurves, reportV4Request, multipliers, override).
-        // Clear everything tied to a specific MMU session.
         patchState(store, {
           mmuName: null,
           availableMmuNames: [],
@@ -296,42 +325,39 @@ export const MmuRiskStore = signalStore(
   }),
 );
 
-export function mergeRows(
+/** Build the 4-field view. Tenors come from Risk; missing Inputs → zeros. */
+export function mergeRows(risk: RiskItem[], positionTargets: PositionTargetItem[]): MergedRow[] {
+  const targetByTenor = new Map(positionTargets.map((p) => [p.tenor, p]));
+  return risk.map((r) => {
+    const t = targetByTenor.get(r.tenor);
+    return {
+      tenor: r.tenor,
+      reflexPosition: r.value,
+      manualAdjustment: t?.manualAdjustment ?? 0,
+      targetPosition: t?.targetPosition ?? 0,
+    };
+  });
+}
+
+/**
+ * Export payload: one entry per tenor in Risk. ReflexPosition always comes from
+ * Risk (authoritative); manual/target from positionTargets if known, else 0.
+ * Mapper.positionTargetToDto computes the adjusted fields as raw sums.
+ */
+function buildExportPayload(
   risk: RiskItem[],
   positionTargets: PositionTargetItem[],
-  override: OverrideSource,
-): MergedRow[] {
-  const byTenor = new Map<string, MergedRow>();
-  const ensure = (tenor: string): MergedRow => {
-    let row = byTenor.get(tenor);
-    if (!row) {
-      row = {
-        tenor,
-        reflexPosition: null,
-        manualAdjustment: null,
-        adjustedReflexPosition: null,
-        targetPosition: null,
-        adjustedEPosition: null,
-      };
-      byTenor.set(tenor, row);
-    }
-    return row;
-  };
-
-  for (const r of risk) {
-    ensure(r.tenor).reflexPosition = r.value;
-  }
-  for (const p of positionTargets) {
-    const row = ensure(p.tenor);
-    row.manualAdjustment = p.manualAdjustment;
-    row.adjustedReflexPosition = p.adjustedReflexPosition;
-    row.targetPosition = p.targetPosition;
-    row.adjustedEPosition = p.adjustedEPosition;
-    if (override === 'inputs' || row.reflexPosition === null) {
-      row.reflexPosition = p.reflexPosition;
-    }
-  }
-  return Array.from(byTenor.values());
+): PositionTargetItem[] {
+  const targetByTenor = new Map(positionTargets.map((p) => [p.tenor, p]));
+  return risk.map((r) => {
+    const t = targetByTenor.get(r.tenor);
+    return {
+      tenor: r.tenor,
+      reflexPosition: r.value,
+      manualAdjustment: t?.manualAdjustment ?? 0,
+      targetPosition: t?.targetPosition ?? 0,
+    };
+  });
 }
 
 function describeError(err: unknown): string {
