@@ -66,6 +66,22 @@ const numericFormatter = (params: { value: unknown }): string =>
       --ag-header-foreground-color: #1a1a1a;
       --ag-header-background-color: #f0f0f0;
     }
+
+    // Explicit column separators — visible across all cell colors
+    // (blue / yellow / white) where the ag-grid default theme lets
+    // same-colored adjacent cells merge visually.
+    ::ng-deep .mmu-grid .ag-cell {
+      border-right: 1px solid rgba(0, 0, 0, 0.18);
+    }
+    ::ng-deep .mmu-grid .ag-cell:last-of-type {
+      border-right: none;
+    }
+    ::ng-deep .mmu-grid .ag-header-cell {
+      border-right: 1px solid rgba(0, 0, 0, 0.18);
+    }
+    ::ng-deep .mmu-grid .ag-header-cell:last-of-type {
+      border-right: none;
+    }
   `,
 })
 export class MmuRiskGridComponent {
