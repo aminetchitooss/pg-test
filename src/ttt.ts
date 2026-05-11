@@ -23,7 +23,6 @@
   };
 
 
-
   private buildContextMenuItems(
     params: GetContextMenuItemsParams<CreditData>,
   ): (DefaultMenuItem | MenuItemDef<CreditData>)[] {
@@ -58,18 +57,58 @@
       name: 'Bring to Front',
       subMenu: candidates.map((col) => ({
         name: (col.getColDef().headerName as string) ?? String(col.getColId()),
-        action: () => {
-          // Unhide hidden picks (e.g. customRowGroup placeholders whose parent isn't expanded)
-          // then move into the clicked column's current displayed position.
-          this.gridApi?.applyColumnState({
-            state: [{ colId: col.getColId(), hide: false }],
-          });
-          const displayed = this.gridApi?.getAllDisplayedColumns() ?? [];
-          const targetIdx = displayed.findIndex((c) => c.getColId() === clickedId);
-          if (targetIdx >= 0) {
-            this.gridApi?.moveColumns([col], targetIdx);
-          }
-        },
+        action: () => this.bringColumnToFront(col, params.column!, clickedId),
       })),
     };
+  }
+
+  private bringColumnToFront(picked: any, clickedColumn: any, clickedId: string) {
+    if (!this.gridApi) return;
+
+    // If the clicked column is a row-group placeholder, capture the level of the swap and
+    // remember which row-group nodes are expanded at shallower levels so we can restore them
+    // after the existing onColumnMoved collapse logic runs.
+    const clickedDef = clickedColumn.getColDef();
+    const isClickedGroupCol = typeof clickedDef.showRowGroup === 'string';
+    const expansionsToRestore: string[] = [];
+
+    if (isClickedGroupCol) {
+      const displayedNow = this.gridApi.getAllDisplayedColumns();
+      const groupColsInOrder = displayedNow.filter(
+        (c) => typeof c.getColDef().showRowGroup === 'string',
+      );
+      const clickedLevel = groupColsInOrder.findIndex((c) => c.getColId() === clickedId);
+      if (clickedLevel > 0) {
+        this.gridApi.forEachNode((node) => {
+          if (node.group && node.expanded && node.level < clickedLevel && node.id) {
+            expansionsToRestore.push(node.id);
+          }
+        });
+      }
+    }
+
+    // Unhide hidden picks (e.g. customRowGroup placeholders whose parent isn't expanded yet)
+    // then move into the clicked column's current displayed position.
+    this.gridApi.applyColumnState({
+      state: [{ colId: picked.getColId(), hide: false }],
+    });
+    const displayed = this.gridApi.getAllDisplayedColumns() ?? [];
+    const targetIdx = displayed.findIndex((c) => c.getColId() === clickedId);
+    if (targetIdx >= 0) {
+      this.gridApi.moveColumns([picked], targetIdx);
+    }
+
+    // onColumnMoved synchronously runs toggleGroupCollapsing(false), which collapses every
+    // expanded row. Re-expand the ones whose level is shallower than the swap point — those
+    // are still meaningful because their grouping field didn't change.
+    if (expansionsToRestore.length) {
+      setTimeout(() => {
+        expansionsToRestore.forEach((id) => {
+          const node = this.gridApi?.getRowNode(id);
+          if (node && !node.expanded) {
+            node.setExpanded(true);
+          }
+        });
+      });
+    }
   }
