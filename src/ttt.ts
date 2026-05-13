@@ -32,27 +32,36 @@
     return [bringToFront, 'separator', ...defaults];
   }
 
+  // Hierarchy level of a customRowGroup-{field} placeholder = the rowGroupIndex of its
+  // underlying field column (which is what row nodes use for node.level).
+  private getRowGroupLevel(placeholderColumn: any): number {
+    const field = placeholderColumn?.getColDef()?.showRowGroup;
+    if (typeof field !== 'string') return -1;
+    const state = this.gridApi?.getColumnState() ?? [];
+    const entry = state.find((s) => s.colId === field);
+    if (!entry || entry.rowGroupIndex === null || entry.rowGroupIndex === undefined) return -1;
+    return entry.rowGroupIndex;
+  }
+
+  // Position of a column in the CURRENT column state (vs. getColumns() which returns the
+  // original definition order — meaningless after moves).
+  private findStateIndex(colId: string): number {
+    const state = this.gridApi?.getColumnState() ?? [];
+    return state.findIndex((s) => s.colId === colId);
+  }
+
   private buildBringToFrontMenuItem(
     params: GetContextMenuItemsParams<CreditData>,
   ): MenuItemDef<CreditData> | null {
     if (!this.gridApi || !params.column) return null;
+    if (typeof params.column.getColDef().showRowGroup !== 'string') return null;
+    // Exclude footer/subtotal/grand-total rows
+    if (params.node?.footer || params.node?.rowPinned) return null;
 
-    const allColumns = this.gridApi.getColumns() ?? [];
-    // Drop the underlying row-group field columns — they're hidden duplicates of their
-    // customRowGroup-* placeholders, which already represent them in the menu.
-    const ordered = allColumns.filter((col) => {
-      const def = col.getColDef();
-      const types = Array.isArray(def.type) ? def.type : def.type ? [def.type] : [];
-      return !types.includes('customRowGroupField');
-    });
-
-    const clickedId = params.column.getColId();
-    const clickedIdx = ordered.findIndex((c) => c.getColId() === clickedId);
-    if (clickedIdx < 0) return null;
-
-    const candidates = ordered.slice(clickedIdx + 1);
+    const candidates = this.getCandidateGroupPlaceholders(params.column);
     if (candidates.length === 0) return null;
 
+    const clickedId = params.column.getColId();
     return {
       name: 'Bring to Front',
       subMenu: candidates.map((col) => ({
@@ -62,45 +71,62 @@
     };
   }
 
+  // Candidates for the Bring-to-Front submenu are every row-group placeholder
+  // EXCEPT the clicked column itself and the placeholders currently displayed to its LEFT.
+  // Hidden placeholders deeper in the hierarchy ARE included, and so are placeholders that
+  // were previously brought forward then pushed to a deeper position — anything not on the
+  // left of the clicked column right now is a fair pick.
+  private getCandidateGroupPlaceholders(clickedColumn: any): any[] {
+    if (!this.gridApi) return [];
+
+    const displayedGroupCols = this.gridApi
+      .getAllDisplayedColumns()
+      .filter((c) => typeof c.getColDef().showRowGroup === 'string');
+    const clickedId = clickedColumn.getColId();
+    const clickedDisplayIdx = displayedGroupCols.findIndex(
+      (c) => c.getColId() === clickedId,
+    );
+    if (clickedDisplayIdx < 0) return [];
+
+    const leftOfClicked = new Set(
+      displayedGroupCols.slice(0, clickedDisplayIdx).map((c) => c.getColId()),
+    );
+
+    return (this.gridApi.getColumns() ?? []).filter((c) => {
+      const def = c.getColDef();
+      if (typeof def.showRowGroup !== 'string') return false;
+      if (c.getColId() === clickedId) return false;
+      if (leftOfClicked.has(c.getColId())) return false;
+      return true;
+    });
+  }
+
   private bringColumnToFront(picked: any, clickedColumn: any, clickedId: string) {
     if (!this.gridApi) return;
 
-    // If the clicked column is a row-group placeholder, capture the level of the swap and
-    // remember which row-group nodes are expanded at shallower levels so we can restore them
-    // after the existing onColumnMoved collapse logic runs.
-    const clickedDef = clickedColumn.getColDef();
-    const isClickedGroupCol = typeof clickedDef.showRowGroup === 'string';
+    // Use the row-group hierarchy level (rowGroupIndex of the underlying field), not the
+    // displayed-column index — node.level reads rgi, so they need to stay in sync.
+    const clickedLevel = this.getRowGroupLevel(clickedColumn);
     const expansionsToRestore: string[] = [];
-
-    if (isClickedGroupCol) {
-      const displayedNow = this.gridApi.getAllDisplayedColumns();
-      const groupColsInOrder = displayedNow.filter(
-        (c) => typeof c.getColDef().showRowGroup === 'string',
-      );
-      const clickedLevel = groupColsInOrder.findIndex((c) => c.getColId() === clickedId);
-      if (clickedLevel > 0) {
-        this.gridApi.forEachNode((node) => {
-          if (node.group && node.expanded && node.level < clickedLevel && node.id) {
-            expansionsToRestore.push(node.id);
-          }
-        });
-      }
+    if (clickedLevel > 0) {
+      this.gridApi.forEachNode((node) => {
+        if (node.group && node.expanded && node.level < clickedLevel && node.id) {
+          expansionsToRestore.push(node.id);
+        }
+      });
     }
 
-    // Unhide hidden picks (e.g. customRowGroup placeholders whose parent isn't expanded yet)
-    // then move into the clicked column's current displayed position.
+    // Unhide the pick then move it into the clicked column's CURRENT STATE position.
+    // moveColumns target is the state index (including hidden cols). onColumnMoved's
+    // clamp now skips API-sourced moves so our precise target isn't clobbered.
     this.gridApi.applyColumnState({
       state: [{ colId: picked.getColId(), hide: false }],
     });
-    const displayed = this.gridApi.getAllDisplayedColumns() ?? [];
-    const targetIdx = displayed.findIndex((c) => c.getColId() === clickedId);
-    if (targetIdx >= 0) {
-      this.gridApi.moveColumns([picked], targetIdx);
+    const clickedStateIdx = this.findStateIndex(clickedId);
+    if (clickedStateIdx >= 0) {
+      this.gridApi.moveColumns([picked], clickedStateIdx);
     }
 
-    // onColumnMoved synchronously runs toggleGroupCollapsing(false), which collapses every
-    // expanded row. Re-expand the ones whose level is shallower than the swap point — those
-    // are still meaningful because their grouping field didn't change.
     if (expansionsToRestore.length) {
       setTimeout(() => {
         expansionsToRestore.forEach((id) => {
