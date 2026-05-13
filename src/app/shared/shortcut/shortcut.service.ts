@@ -1,27 +1,28 @@
 import { DOCUMENT } from '@angular/common';
-import { inject, Injectable, NgZone, OnDestroy } from '@angular/core';
-import { fromEvent, Subscription } from 'rxjs';
+import { inject, Injectable, NgZone } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { fromEvent } from 'rxjs';
 import { filter, map } from 'rxjs/operators';
 import { normalizeCombo, normalizeEvent, ShortcutHandler } from './shortcut.util';
 
 @Injectable({ providedIn: 'root' })
-export class ShortcutService implements OnDestroy {
+export class ShortcutService {
   private readonly ngZone = inject(NgZone);
   private readonly document = inject(DOCUMENT);
 
   /** LIFO stack of handlers per normalized combo. */
   private readonly shortcuts = new Map<string, ShortcutHandler[]>();
   private pauseCount = 0;
-  private readonly sub: Subscription | null;
 
   constructor() {
-    this.sub = this.ngZone.runOutsideAngular(() =>
+    this.ngZone.runOutsideAngular(() =>
       fromEvent<KeyboardEvent>(this.document, 'keydown')
         .pipe(
           filter(() => !this.pauseCount),
           filter((ev) => !this.isEditableTarget(ev.target)),
           map((ev) => ({ ev, combo: normalizeEvent(ev) })),
           filter(({ combo }) => this.hasHandler(combo)),
+          takeUntilDestroyed(),
         )
         .subscribe(({ ev, combo }) => this.dispatch(ev, combo)),
     );
@@ -54,10 +55,6 @@ export class ShortcutService implements OnDestroy {
 
   resumeAll(): void {
     if (this.pauseCount > 0) this.pauseCount--;
-  }
-
-  ngOnDestroy(): void {
-    this.sub?.unsubscribe();
   }
 
   private dispatch(ev: KeyboardEvent, combo: string): void {
