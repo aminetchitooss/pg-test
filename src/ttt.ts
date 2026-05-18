@@ -44,20 +44,26 @@
     // Exclude footer/subtotal/grand-total rows
     if (params.node?.footer || params.node?.rowPinned) return null;
 
-    const candidates = this.getCandidateGroupPlaceholders(params.column);
+    const candidates = this.getPickableGroupColumns(params.column);
     if (candidates.length === 0) return null;
 
     const clickedId = params.column.getColId();
+    const clickedNode = params.node ?? null;
     return {
       name: 'Drill-Down To',
       subMenu: candidates.map((col) => ({
         name: (col.getColDef().headerName as string) ?? String(col.getColId()),
-        action: () => this.drillDownToColumn(col, params.column!, clickedId),
+        action: () => this.drillDownToColumn(col, params.column!, clickedId, clickedNode),
       })),
     };
   }
 
-  private drillDownToColumn(picked: any, clickedColumn: any, clickedId: string) {
+  private drillDownToColumn(
+    picked: any,
+    clickedColumn: any,
+    clickedId: string,
+    clickedNode: IRowNode | null,
+  ) {
     if (!this.gridApi) return;
 
     // clickedLevel comes from the *row-group hierarchy* (rowGroupIndex of the underlying
@@ -66,13 +72,18 @@
     const clickedLevel = this.getRowGroupLevel(clickedColumn);
     if (clickedLevel < 0) return;
 
-    const expansionsToRestore: string[] = [];
-    if (clickedLevel > 0) {
-      this.gridApi.forEachNode((node) => {
-        if (node.group && node.expanded && node.level < clickedLevel && node.id) {
-          expansionsToRestore.push(node.id);
-        }
-      });
+    // For drill-down we preserve expansions at AND above the clicked level — restoring the
+    // clicked-level ones triggers onRowGroupOpened, which reveals the newly inserted
+    // level-(N+1) placeholder that toggleGroupCollapsing(false) just hid. Plus: include the
+    // clicked row itself so drilling on a collapsed grid still has a visible effect.
+    const expansionsToRestore = new Set<string>();
+    this.gridApi.forEachNode((node) => {
+      if (node.group && node.expanded && node.level <= clickedLevel && node.id) {
+        expansionsToRestore.add(node.id);
+      }
+    });
+    if (clickedNode?.group && clickedNode.id) {
+      expansionsToRestore.add(clickedNode.id);
     }
 
     // Unhide the pick then move it RIGHT AFTER the clicked placeholder in column STATE
@@ -85,16 +96,12 @@
     if (clickedStateIdx < 0) return;
     this.gridApi.moveColumns([picked], clickedStateIdx + 1);
 
-    setTimeout(() => {
-      if (!this.gridApi) return;
-      expansionsToRestore.forEach((id) => {
-        const node = this.gridApi?.getRowNode(id);
-        if (node && !node.expanded) node.setExpanded(true);
+    if (expansionsToRestore.size) {
+      setTimeout(() => {
+        expansionsToRestore.forEach((id) => {
+          const node = this.gridApi?.getRowNode(id);
+          if (node && !node.expanded) node.setExpanded(true);
+        });
       });
-      this.gridApi.forEachNode((node) => {
-        if (node.group && node.level === clickedLevel && !node.expanded) {
-          node.setExpanded(true);
-        }
-      });
-    });
+    }
   }
