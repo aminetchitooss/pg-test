@@ -105,3 +105,107 @@
       });
     }
   }
+
+  // Hierarchy level of a customRowGroup-{field} placeholder = the rowGroupIndex of its
+  // underlying field column (which is what row nodes use for node.level).
+  private getRowGroupLevel(placeholderColumn: any): number {
+    const field = placeholderColumn?.getColDef()?.showRowGroup;
+    if (typeof field !== 'string') return -1;
+    const state = this.gridApi?.getColumnState() ?? [];
+    const entry = state.find((s) => s.colId === field);
+    if (!entry || entry.rowGroupIndex === null || entry.rowGroupIndex === undefined) return -1;
+    return entry.rowGroupIndex;
+  }
+
+  // Position of a column in the CURRENT column state (vs. getColumns() which returns the
+  // original definition order — meaningless after moves).
+  private findStateIndex(colId: string): number {
+    const state = this.gridApi?.getColumnState() ?? [];
+    return state.findIndex((s) => s.colId === colId);
+  }
+
+  private buildBringToFrontMenuItem(
+    params: GetContextMenuItemsParams<CreditData>,
+  ): MenuItemDef<CreditData> | null {
+    if (!this.gridApi || !params.column) return null;
+    if (typeof params.column.getColDef().showRowGroup !== 'string') return null;
+    // Exclude footer/subtotal/grand-total rows
+    if (params.node?.footer || params.node?.rowPinned) return null;
+
+    const candidates = this.getPickableGroupColumns(params.column);
+    if (candidates.length === 0) return null;
+
+    const clickedId = params.column.getColId();
+    return {
+      name: 'Bring to Front',
+      subMenu: candidates.map((col) => ({
+        name: (col.getColDef().headerName as string) ?? String(col.getColId()),
+        action: () => this.bringColumnToFront(col, params.column!, clickedId),
+      })),
+    };
+  }
+
+  // Every row-group placeholder except the clicked one and the ones currently visible to
+  // its left. Hidden/deeper placeholders stay in the list.
+  private getPickableGroupColumns(clickedColumn: any): any[] {
+    if (!this.gridApi) return [];
+
+    const displayedGroupCols = this.gridApi
+      .getAllDisplayedColumns()
+      .filter((c) => typeof c.getColDef().showRowGroup === 'string');
+    const clickedId = clickedColumn.getColId();
+    const clickedDisplayIdx = displayedGroupCols.findIndex(
+      (c) => c.getColId() === clickedId,
+    );
+    if (clickedDisplayIdx < 0) return [];
+
+    const leftOfClicked = new Set(
+      displayedGroupCols.slice(0, clickedDisplayIdx).map((c) => c.getColId()),
+    );
+
+    return (this.gridApi.getColumns() ?? []).filter((c) => {
+      const def = c.getColDef();
+      if (typeof def.showRowGroup !== 'string') return false;
+      if (c.getColId() === clickedId) return false;
+      if (leftOfClicked.has(c.getColId())) return false;
+      return true;
+    });
+  }
+
+  private bringColumnToFront(picked: any, clickedColumn: any, clickedId: string) {
+    if (!this.gridApi) return;
+
+    // Use the row-group hierarchy level (rowGroupIndex of the underlying field), not the
+    // displayed-column index. After a few mixed BTF/Drill operations these can diverge.
+    const clickedLevel = this.getRowGroupLevel(clickedColumn);
+    const expansionsToRestore: string[] = [];
+    if (clickedLevel > 0) {
+      this.gridApi.forEachNode((node) => {
+        if (node.group && node.expanded && node.level < clickedLevel && node.id) {
+          expansionsToRestore.push(node.id);
+        }
+      });
+    }
+
+    // Unhide the pick then move it into the clicked column's CURRENT STATE position.
+    // moveColumns target is the state index (including hidden cols). onColumnMoved's
+    // clamp now skips API-sourced moves so our precise target isn't clobbered.
+    this.gridApi.applyColumnState({
+      state: [{ colId: picked.getColId(), hide: false }],
+    });
+    const clickedStateIdx = this.findStateIndex(clickedId);
+    if (clickedStateIdx >= 0) {
+      this.gridApi.moveColumns([picked], clickedStateIdx);
+    }
+
+    if (expansionsToRestore.length) {
+      setTimeout(() => {
+        expansionsToRestore.forEach((id) => {
+          const node = this.gridApi?.getRowNode(id);
+          if (node && !node.expanded) {
+            node.setExpanded(true);
+          }
+        });
+      });
+    }
+  }
