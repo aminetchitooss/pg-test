@@ -1,4 +1,17 @@
-  // Override only to memoize the date branch. We intercept the exact case the
+
+ // Credit reports repeat the same date strings across many rows (settlement,
+  // maturity, trade dates). dayjs strict parsing dominates the conversion, so we
+  // memoize it for the lifetime of a single convert() call. Scoped to this
+  // subclass on purpose: the shared base must stay generic for other modules.
+  private readonly dateCache = new Map<string, Date | undefined>();
+
+  
+    // Bound the cache to one conversion so the root singleton can't grow forever.
+    this.dateCache.clear();
+
+
+
+// Override only to memoize the date branch. We intercept the exact case the
   // base would route to dateParser() — a date-typed property, no setter, string
   // value — and delegate everything else unchanged to the shared implementation.
   protected override parseValueIntoObjectPropertyType(
