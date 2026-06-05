@@ -5,7 +5,7 @@
   // subclass on purpose: the shared base must stay generic for other modules.
   private readonly dateCache = new Map<string, Date | undefined>();
 
-  
+
     // Bound the cache to one conversion so the root singleton can't grow forever.
     this.dateCache.clear();
 
@@ -43,3 +43,7 @@
     this.dateCache.set(value, parsed);
     return parsed;
   }
+
+  console.log('[maturityDate] ' + (() => { const r = data?.result?.result ?? []; const idx = (r[0]?.header ?? []).findIndex((c: any) => c[0] === 'maturityDate'); if (idx < 0) return 'column not found'; const vals = r.slice(1).map((row: any) =>
+  row[0][idx]); const distinct = new Set(vals).size; return `${vals.length} rows, ${distinct} distinct, ${(100 * (1 - distinct / Math.max(vals.length, 1))).toFixed(1)}% repeats → ~${(vals.length / Math.max(distinct, 1)).toFixed(0)}x avg reuse`;
+  })());
