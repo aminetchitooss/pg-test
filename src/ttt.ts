@@ -209,3 +209,62 @@
       });
     }
   }
+
+
+  convert<T extends object>(
+    data: ReportResponse,
+    factory: GenericObjectFactory<T>,
+    reportQuery: ReportQuery,
+  ): T[] {
+    const dataResult: Array<any> = data?.result?.result;
+    if (dataResult === undefined || dataResult.length === 0) {
+      return [];
+    }
+
+    const queries = reportQuery.params[0].queries;
+    const exemptSet = this.getExemptKeysFromQueryValues(queries);
+    const hasExemptProperties = exemptSet.size > 0;
+
+    // First element maps property index -> [name, type]; we only need the names.
+    const objectKeysTypeMap = dataResult.shift().header;
+    const propertyNames: string[] = new Array(objectKeysTypeMap.length);
+    for (let i = 0; i < objectKeysTypeMap.length; i++) {
+      propertyNames[i] = objectKeysTypeMap[i][0];
+    }
+
+    const numRows = dataResult.length;
+    const results: T[] = new Array(numRows);
+
+    for (let i = 0; i < numRows; i++) {
+      const cells = dataResult[i][0];
+      const newObject: T = factory.create();
+
+      for (let j = 0; j < cells.length; j++) {
+        const propertyName = propertyNames[j];
+        if (hasExemptProperties && exemptSet.has(propertyName)) {
+          continue;
+        }
+        this.parseValueIntoObjectPropertyType(newObject, propertyName, cells[j], true);
+      }
+
+      results[i] = newObject;
+    }
+
+    return results;
+  }
+
+  getExemptKeysFromQueryValues(queries: { [key: string]: any[] }): Set<string> {
+    const exemptSet = new Set<string>(['govCorp']);
+
+    for (const key of Object.keys(queries)) {
+      const values = queries[key]?.[2];
+      if (values === undefined) {
+        continue;
+      }
+      for (let j = 0; j < values.length; j++) {
+        exemptSet.add(values[j].split('=')[0]);
+      }
+    }
+
+    return exemptSet;
+  }
