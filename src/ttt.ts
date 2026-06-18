@@ -1,270 +1,82 @@
-  protected gridOptions: GridOptions<CreditData> = {
-    groupDisplayType: 'custom',
-    groupHideOpenParents: true,
-    suppressDragLeaveHidesColumns: true,
-    suppressAggFuncInHeader: true,
-    suppressRowTransform: true,
-    allowContextMenuWithControlKey: true,
-    grandTotalRow: 'bottom',
-    cellSelection: true,
-    groupTotalRow: ({ node }) => {
-      if (node && node.childrenAfterFilter && node.childrenAfterFilter.length > 1) return 'bottom';
-      return undefined;
-    },
-    defaultColDef: {
-      sortable: true,
-      lockPinned: true,
-      cellClassRules: {
-        'subtotal-group': ({ node }: CellClassParams) =>
-          node.level > -1 && node.footer == true,
-      },
-    },
-    getContextMenuItems: (params) => this.buildContextMenuItems(params),
-  };
+import { Injectable } from "@angular/core";
+import { catchError, mergeMap, Observable, throwError } from 'rxjs';
+import { EnforceType, ScopeQueries } from 'src/shared/interfaces/db-context-query';
+import { ReportResponse } from 'src/shared/interfaces/rpc-response.interface';
+import { DbContextReaderDataService } from 'src/shared/services/document-db-context/db-context-reader-data.service';
 
+@Injectable({
+  providedIn: 'root'
+})
+export class DbContextAdminDataService<T, K extends EnforceType<T>> extends DbContextReaderDataService<T, K> {
 
-  private buildContextMenuItems(
-    params: GetContextMenuItemsParams<CreditData>,
-  ): (DefaultMenuItem | MenuItemDef<CreditData>)[] {
-    const defaults = (params.defaultItems ?? []) as (DefaultMenuItem | MenuItemDef<CreditData>)[];
-    const drillDown = this.buildDrillDownToMenuItem(params);
-    const bringToFront = this.buildBringToFrontMenuItem(params);
-    const customItems: (DefaultMenuItem | MenuItemDef<CreditData>)[] = [];
-    if (drillDown) customItems.push(drillDown);
-    if (bringToFront) customItems.push(bringToFront);
-    if (customItems.length === 0) return defaults;
-    return [...customItems, 'separator', ...defaults];
+  create(entry: T): Observable<ReportResponse> {
+    const savedData = this._listData$.getValue();
+    if (!savedData) return this.emptyDataError();
+
+    const nextData = [...savedData, entry];
+
+    const queries = this.builderTools.generateQueriesToCreateNew(<any>entry[this.key]);
+    queries.dataQuery.params.push(entry);
+
+    return this.updateDataRegistry(queries, nextData);
   }
 
-  private buildDrillDownToMenuItem(
-    params: GetContextMenuItemsParams<CreditData>,
-  ): MenuItemDef<CreditData> | null {
-    if (!this.gridApi || !params.column) return null;
-    if (typeof params.column.getColDef().showRowGroup !== 'string') return null;
-    // Exclude footer/subtotal/grand-total rows
-    if (params.node?.footer || params.node?.rowPinned) return null;
+  edit(entry: Partial<T>): Observable<ReportResponse> {
+    const savedData = this._listData$.getValue();
+    const currentReport = this._currentData$.getValue()?.[0];
+    if (!currentReport || !savedData) return this.emptyDataError();
 
-    const candidates = this.getPickableGroupColumns(params.column);
-    if (candidates.length === 0) return null;
+    const updatedEntry = { ...currentReport, ...entry };
 
-    const clickedId = params.column.getColId();
-    const clickedNode = params.node ?? null;
-    return {
-      name: 'Drill-Down To',
-      subMenu: candidates.map((col) => ({
-        name: (col.getColDef().headerName as string) ?? String(col.getColId()),
-        action: () => this.drillDownToColumn(col, params.column!, clickedId, clickedNode),
-      })),
-    };
+    const queries = this.builderTools.generateQueryToPatchById(<any>updatedEntry[this.key]);
+    queries.dataQuery.params.push(updatedEntry);
+
+    const indexToUpdate = savedData.findIndex((item) => item[this.key] === updatedEntry[this.key]);
+    const nextData = indexToUpdate === -1
+      ? savedData
+      : savedData.map((item, i) => (i === indexToUpdate ? updatedEntry : item));
+
+    return this.updateDataRegistry(queries, nextData);
   }
 
-  private drillDownToColumn(
-    picked: any,
-    clickedColumn: any,
-    clickedId: string,
-    clickedNode: IRowNode | null,
-  ) {
-    if (!this.gridApi) return;
+  deleteById(id: string): Observable<ReportResponse> {
+    const savedData = this._listData$.getValue();
+    if (!savedData) return this.emptyDataError();
 
-    // clickedLevel comes from the *row-group hierarchy* (rowGroupIndex of the underlying
-    // field column), NOT the displayed-column index. After several mixed Bring-to-Front /
-    // Drill-Down operations the displayed index and the hierarchy level can drift apart.
-    const clickedLevel = this.getRowGroupLevel(clickedColumn);
-    if (clickedLevel < 0) return;
+    const nextData = savedData.filter((item) => item[this.key] !== id);
 
-    // For drill-down we preserve expansions at AND above the clicked level — restoring the
-    // clicked-level ones triggers onRowGroupOpened, which reveals the newly inserted
-    // level-(N+1) placeholder that toggleGroupCollapsing(false) just hid. Plus: include the
-    // clicked row itself so drilling on a collapsed grid still has a visible effect.
-    const expansionsToRestore = new Set<string>();
-    this.gridApi.forEachNode((node) => {
-      if (node.group && node.expanded && node.level <= clickedLevel && node.id) {
-        expansionsToRestore.add(node.id);
-      }
-    });
-    if (clickedNode?.group && clickedNode.id) {
-      expansionsToRestore.add(clickedNode.id);
-    }
+    const queries = this.builderTools.generateQueryToDeleteById(id);
 
-    // Unhide the pick then move it RIGHT AFTER the clicked placeholder in column STATE
-    // order. onColumnMoved skips its clamp on API-sourced moves so the precise target
-    // index isn't clobbered.
-    this.gridApi.applyColumnState({
-      state: [{ colId: picked.getColId(), hide: false }],
-    });
-    const clickedStateIdx = this.findStateIndex(clickedId);
-    if (clickedStateIdx < 0) return;
-    this.gridApi.moveColumns([picked], clickedStateIdx + 1);
-
-    if (expansionsToRestore.size) {
-      setTimeout(() => {
-        expansionsToRestore.forEach((id) => {
-          const node = this.gridApi?.getRowNode(id);
-          if (node && !node.expanded) node.setExpanded(true);
-        });
-      });
-    }
+    return this.updateDataRegistry(queries, nextData);
   }
 
-  // Hierarchy level of a customRowGroup-{field} placeholder = the rowGroupIndex of its
-  // underlying field column (which is what row nodes use for node.level).
-  private getRowGroupLevel(placeholderColumn: any): number {
-    const field = placeholderColumn?.getColDef()?.showRowGroup;
-    if (typeof field !== 'string') return -1;
-    const state = this.gridApi?.getColumnState() ?? [];
-    const entry = state.find((s) => s.colId === field);
-    if (!entry || entry.rowGroupIndex === null || entry.rowGroupIndex === undefined) return -1;
-    return entry.rowGroupIndex;
-  }
+  /**
+   * Optimistically applies `nextData` to local state, then persists it as two sequential
+   * writes: the registry index, then the data scope.
+   *
+   * Presto has no cross-document transaction, so there is an unavoidable partial-failure
+   * window between the two writes — if the second write fails, the server is left in a
+   * half-written state until the next successful full sync. Eliminating that window needs
+   * backend (atomic batch) support; it cannot be solved here.
+   *
+   * What we DO guarantee client-side: on any failure the local cache is rolled back to its
+   * previous value and the error is propagated, so the UI never shows an unsaved change as
+   * saved. We keep the original registry-first ordering on purpose — which document should
+   * be written first is a backend-contract decision, not a client one.
+   */
+  protected updateDataRegistry(queries: ScopeQueries<T>, nextData: T[]): Observable<ReportResponse> {
+    const previousData = this._listData$.getValue();
+    this._listData$.next(nextData);
 
-  // Position of a column in the CURRENT column state (vs. getColumns() which returns the
-  // original definition order — meaningless after moves).
-  private findStateIndex(colId: string): number {
-    const state = this.gridApi?.getColumnState() ?? [];
-    return state.findIndex((s) => s.colId === colId);
-  }
+    const { registryQuery, dataQuery } = queries;
+    registryQuery.params.push(nextData);
 
-  private buildBringToFrontMenuItem(
-    params: GetContextMenuItemsParams<CreditData>,
-  ): MenuItemDef<CreditData> | null {
-    if (!this.gridApi || !params.column) return null;
-    if (typeof params.column.getColDef().showRowGroup !== 'string') return null;
-    // Exclude footer/subtotal/grand-total rows
-    if (params.node?.footer || params.node?.rowPinned) return null;
-
-    const candidates = this.getPickableGroupColumns(params.column);
-    if (candidates.length === 0) return null;
-
-    const clickedId = params.column.getColId();
-    return {
-      name: 'Bring to Front',
-      subMenu: candidates.map((col) => ({
-        name: (col.getColDef().headerName as string) ?? String(col.getColId()),
-        action: () => this.bringColumnToFront(col, params.column!, clickedId),
-      })),
-    };
-  }
-
-  // Every row-group placeholder except the clicked one and the ones currently visible to
-  // its left. Hidden/deeper placeholders stay in the list.
-  private getPickableGroupColumns(clickedColumn: any): any[] {
-    if (!this.gridApi) return [];
-
-    const displayedGroupCols = this.gridApi
-      .getAllDisplayedColumns()
-      .filter((c) => typeof c.getColDef().showRowGroup === 'string');
-    const clickedId = clickedColumn.getColId();
-    const clickedDisplayIdx = displayedGroupCols.findIndex(
-      (c) => c.getColId() === clickedId,
+    return this.getOneTimeDataFromHttp(registryQuery).pipe(
+      mergeMap(() => this.getOneTimeDataFromHttp(dataQuery)),
+      catchError((err) => {
+        this._listData$.next(previousData);
+        return throwError(() => err);
+      })
     );
-    if (clickedDisplayIdx < 0) return [];
-
-    const leftOfClicked = new Set(
-      displayedGroupCols.slice(0, clickedDisplayIdx).map((c) => c.getColId()),
-    );
-
-    return (this.gridApi.getColumns() ?? []).filter((c) => {
-      const def = c.getColDef();
-      if (typeof def.showRowGroup !== 'string') return false;
-      if (c.getColId() === clickedId) return false;
-      if (leftOfClicked.has(c.getColId())) return false;
-      return true;
-    });
   }
-
-  private bringColumnToFront(picked: any, clickedColumn: any, clickedId: string) {
-    if (!this.gridApi) return;
-
-    // Use the row-group hierarchy level (rowGroupIndex of the underlying field), not the
-    // displayed-column index. After a few mixed BTF/Drill operations these can diverge.
-    const clickedLevel = this.getRowGroupLevel(clickedColumn);
-    const expansionsToRestore: string[] = [];
-    if (clickedLevel > 0) {
-      this.gridApi.forEachNode((node) => {
-        if (node.group && node.expanded && node.level < clickedLevel && node.id) {
-          expansionsToRestore.push(node.id);
-        }
-      });
-    }
-
-    // Unhide the pick then move it into the clicked column's CURRENT STATE position.
-    // moveColumns target is the state index (including hidden cols). onColumnMoved's
-    // clamp now skips API-sourced moves so our precise target isn't clobbered.
-    this.gridApi.applyColumnState({
-      state: [{ colId: picked.getColId(), hide: false }],
-    });
-    const clickedStateIdx = this.findStateIndex(clickedId);
-    if (clickedStateIdx >= 0) {
-      this.gridApi.moveColumns([picked], clickedStateIdx);
-    }
-
-    if (expansionsToRestore.length) {
-      setTimeout(() => {
-        expansionsToRestore.forEach((id) => {
-          const node = this.gridApi?.getRowNode(id);
-          if (node && !node.expanded) {
-            node.setExpanded(true);
-          }
-        });
-      });
-    }
-  }
-
-
-  convert<T extends object>(
-    data: ReportResponse,
-    factory: GenericObjectFactory<T>,
-    reportQuery: ReportQuery,
-  ): T[] {
-    const dataResult: Array<any> = data?.result?.result;
-    if (dataResult === undefined || dataResult.length === 0) {
-      return [];
-    }
-
-    const queries = reportQuery.params[0].queries;
-    const exemptSet = this.getExemptKeysFromQueryValues(queries);
-    const hasExemptProperties = exemptSet.size > 0;
-
-    // First element maps property index -> [name, type]; we only need the names.
-    const objectKeysTypeMap = dataResult.shift().header;
-    const propertyNames: string[] = new Array(objectKeysTypeMap.length);
-    for (let i = 0; i < objectKeysTypeMap.length; i++) {
-      propertyNames[i] = objectKeysTypeMap[i][0];
-    }
-
-    const numRows = dataResult.length;
-    const results: T[] = new Array(numRows);
-
-    for (let i = 0; i < numRows; i++) {
-      const cells = dataResult[i][0];
-      const newObject: T = factory.create();
-
-      for (let j = 0; j < cells.length; j++) {
-        const propertyName = propertyNames[j];
-        if (hasExemptProperties && exemptSet.has(propertyName)) {
-          continue;
-        }
-        this.parseValueIntoObjectPropertyType(newObject, propertyName, cells[j], true);
-      }
-
-      results[i] = newObject;
-    }
-
-    return results;
-  }
-
-  getExemptKeysFromQueryValues(queries: { [key: string]: any[] }): Set<string> {
-    const exemptSet = new Set<string>(['govCorp']);
-
-    for (const key of Object.keys(queries)) {
-      const values = queries[key]?.[2];
-      if (values === undefined) {
-        continue;
-      }
-      for (let j = 0; j < values.length; j++) {
-        exemptSet.add(values[j].split('=')[0]);
-      }
-    }
-
-    return exemptSet;
-  }
+}
