@@ -5,14 +5,10 @@ import { CreditData } from 'src/app/credit/models/credit-data.model';
 import { CreditCsvToObjectsService } from 'src/app/credit/services/credit-csv-to-objects/credit-csv-to-objects.service';
 import { CreditPrestoQueryDataService } from 'src/app/credit/services/credit-presto-query-data/credit-presto-query-data.service';
 import {
-  ColumnAggregation,
-  DefaultColumnAggregation,
-} from 'src/app/credit/interfaces/credit-column-aggregation.interface';
-import { COLUMN_AGG_FUNCS } from 'src/app/credit/utils/credit-agg-funcs.utils';
-import {
   HEADER_DATA_TYPE,
   ResponseHeaderDataType,
 } from 'src/shared/interfaces/credit-response-header-data-type.interface';
+import { aggFuncFor } from 'src/shared/grid-aggregation/grid-aggregation';
 import { ReportQuery } from 'src/shared/interfaces/query.interface';
 import { AgGridToolsService } from 'src/shared/services/utility-services/ag-grid-tools.service';
 
@@ -101,7 +97,11 @@ export class CreditGridDataService {
 
     const columnDecimalPrecision =
       this.queryDataService.getColumnDecimalPrecisionFromPrestoQueryString();
-    const columnAggregation = this.queryDataService.getColumnAggregationFromPrestoQueryString();
+    const columnAggregation = new Map(
+      this.queryDataService
+        .getColumnAggregationFromPrestoQueryString()
+        .map(({ key, value }) => [key.toLowerCase(), value]),
+    );
     // Exclude the _SortField columns from being processed and added to the grid
     const sortFieldColumnNames: string[] = allowedColumnHeaders
       .filter((col) => col[0].endsWith(this.sortFieldColumnSuffix))
@@ -148,7 +148,7 @@ export class CreditGridDataService {
               columnDecimalPrecision.find(
                 (d: any) => d.key.toLowerCase() == field.toLowerCase(),
               )?.value || 0,
-              columnAggregation.find((a) => a.key.toLowerCase() == field.toLowerCase())?.value,
+              columnAggregation.get(field.toLowerCase()),
             ),
           );
 
@@ -175,11 +175,12 @@ export class CreditGridDataService {
         shouldUpdate = true;
         break;
       }
+      const processedColumn = processedColumns.find((p) => p.field == column.field) as
+        | (ColDef<CreditData> & { decimal: number })
+        | undefined;
       if (
-        (column as ColDef<CreditData> & { decimal: number }).decimal !==
-        (processedColumns.find((p) => p.field == column.field) as ColDef<CreditData> & {
-          decimal: number;
-        })?.decimal
+        (column as ColDef<CreditData> & { decimal: number }).decimal !== processedColumn?.decimal ||
+        column.aggFunc !== processedColumn?.aggFunc
       ) {
         shouldUpdate = true;
         break;
@@ -244,7 +245,7 @@ export class CreditGridDataService {
     isSortable = false,
     isKey = false,
     decimal = 0,
-    aggregation: ColumnAggregation = DefaultColumnAggregation,
+    aggregation?: string,
   ): ColDef<CreditData>[] {
     return [
       ...(isKey
@@ -264,7 +265,7 @@ export class CreditGridDataService {
         cellClass: (row: any) => this.getCellClassesForTotals(row.value),
         ...(!isKey && {
           enableCellChangeFlash: true,
-          aggFunc: COLUMN_AGG_FUNCS[aggregation],
+          aggFunc: aggFuncFor(aggregation),
         }),
         type: [...(isSortable ? [this.sortFieldColumnType] : [])],
         ...(isSortable && this.displayConfig.sortFieldColumn(field as string)),

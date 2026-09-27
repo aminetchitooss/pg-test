@@ -52,8 +52,8 @@ import {
   QueryKeys,
 } from 'src/app/credit/services/credit-presto-query-data/credit-presto-query-data.service';
 import { CreditUserSettingsService } from 'src/app/credit/services/credit-user-settings/credit-user-settings.service';
-import { createCreditAggFuncs, withoutAggFunc } from 'src/app/credit/utils/credit-agg-funcs.utils';
 import { WarningDialogComponent } from 'src/shared/dialogs/warning/warning-dialog.component';
+import { createAggFuncs, withoutAggFunc } from 'src/shared/grid-aggregation/grid-aggregation';
 import { SummaryBarValues } from 'src/shared/interfaces/risk-pivot-grid.interface';
 import { WarningDialogData } from 'src/shared/interfaces/warning-dialog.interface';
 import { AuthenticationService } from 'src/shared/services/authentication/authentication.service';
@@ -224,7 +224,7 @@ export class CreditGridComponent {
       }
       return params.rowNode?.data.PV01;
     },
-    ...createCreditAggFuncs(),
+    ...createAggFuncs(),
   };
 
   protected autoGroupColumnDef = {
@@ -717,7 +717,7 @@ export class CreditGridComponent {
         });
       }
       if (currentColState) {
-        currentGridState.columnState = withoutAggFunc(currentColState);
+        currentGridState.columnState = currentColState;
       }
       currentGridState.mode = this.gridModeService.mode();
       currentGridState.rowGroupExpansion = $event.state.rowGroupExpansion
